@@ -1,0 +1,20 @@
+# vim swap files
+*.swp
+*.swo
+
+# emacs lock files
+.#*
+
+# vscode settings
+.vscode/
+
+.DS_Store
+
+# moonbit
+target/
+.mooncakes
+failed_tests/
+rv64_failed_tests/
+/*.s
+
+__pycache__
