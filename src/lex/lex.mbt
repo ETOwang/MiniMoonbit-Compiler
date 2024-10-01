@@ -43,7 +43,7 @@ pub struct Context {
 }
 
 pub fn lex(context : Context) -> Unit {
-	let str = context.str
+  let str = context.str
   while context.offset < str.length() {
 
     //空格、制表符、换行符 -> skip
@@ -56,7 +56,9 @@ pub fn lex(context : Context) -> Unit {
     }
 
     //注释 -> skip
-    if context.offset + 1 < str.length() && str[context.offset] == '/' && str[context.offset + 1] == '/' {
+    if context.offset + 1 < str.length() &&
+      str[context.offset] == '/' &&
+      str[context.offset + 1] == '/' {
       context.offset += 2
       while context.offset < str.length() && str[context.offset] != '\n' {
         context.offset += 1
@@ -208,7 +210,10 @@ fn lex_number_rest(context : Context, number : String) -> Unit {
 //匹配第一个字符之后的字符
 fn lex_identifier_rest(context : Context, identifier : String) -> Unit {
   if context.offset >= context.str.length() {
-    context.array.push(Identifier(identifier))
+		// 判断是否为关键字
+		if not(isKeyWord(context, identifier)) {
+			context.array.push(Identifier(identifier))
+		}
     return
   }
   let ch = context.str[context.offset]
@@ -220,8 +225,66 @@ fn lex_identifier_rest(context : Context, identifier : String) -> Unit {
     context.offset += 1
     lex_identifier_rest(context, identifier + ch.to_string())
   } else {
-    context.array.push(Identifier(identifier))
+		// 判断是否为关键字
+		if not(isKeyWord(context, identifier)) {
+			context.array.push(Identifier(identifier))
+		}
   }
 }
 
 // TODO: 检索Identifier，判断是否为keyword并修改对应的Token
+fn isKeyWord(context: Context, identifier : String) -> Bool {
+	match identifier {
+		"true" => {
+			context.array.push(True)
+			return true
+		}
+		"false" => {
+			context.array.push(False)
+			return true
+		}
+		"Unit" => {
+			context.array.push(Unit)
+			return true
+		}
+		"Bool" => {
+			context.array.push(Bool)
+			return true
+		}
+		"Int" => {
+			context.array.push(Int)
+			return true
+		}
+		"Double" => {
+			context.array.push(Double)
+			return true
+		}
+		"Array" => {
+			context.array.push(Array)
+			return true
+		}
+		"not" => {
+			context.array.push(Not)
+			return true
+		}
+		"if" => {
+			context.array.push(If)
+			return true
+		}
+		"else" => {
+			context.array.push(Else)
+			return true
+		}
+		"fn" => {
+			context.array.push(Fn)
+			return true
+		}
+		"let" => {
+			context.array.push(Let)
+			return true
+		}
+		_ => {
+			return false
+		}
+	}
+}
