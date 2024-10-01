@@ -36,184 +36,183 @@ enum Token {
   Comment // '//' ~[\r\n]* -> skip
 } derive(Show)
 
-struct Context {
+pub struct Context {
   str : String
   mut offset : Int
   array : Array[Token]
 }
 
-fn lex(context : Context) -> Unit {
-  let { offset, str, array } = context
-  while offset < str.length() {
+pub fn lex(context : Context) -> Unit {
+	let str = context.str
+  while context.offset < str.length() {
 
-    //¿Õ¸ñ¡¢ÖÆ±í·û¡¢»»ĞĞ·û -> skip
-    if str[offset] == ' ' ||
-      str[offset] == '\t' ||
-      str[offset] == '\r' ||
-      str[offset] == '\n' {
+    //ç©ºæ ¼ã€åˆ¶è¡¨ç¬¦ã€æ¢è¡Œç¬¦ -> skip
+    if str[context.offset] == ' ' ||
+      str[context.offset] == '\t' ||
+      str[context.offset] == '\r' ||
+      str[context.offset] == '\n' {
       context.offset += 1
       continue
     }
 
-    //×¢ÊÍ -> skip
-    if offset + 1 < str.length() && str[offset] == '/' && str[offset + 1] == '/' {
+    //æ³¨é‡Š -> skip
+    if context.offset + 1 < str.length() && str[context.offset] == '/' && str[context.offset + 1] == '/' {
       context.offset += 2
-      while offset < str.length() && str[offset] != '\n' {
+      while context.offset < str.length() && str[context.offset] != '\n' {
         context.offset += 1
       }
       continue
     }
 
     //Number
-    if str[offset] >= '0' && str[offset] <= '9' {
-      let number = "\{str[offset]}"
+    if str[context.offset] >= '0' && str[context.offset] <= '9' {
+      let number = "\{str[context.offset]}"
       context.offset += 1
       lex_number_rest(context, number)
       continue
     }
 
     //Identifier
-    if (str[offset] >= 'a' && str[offset] <= 'z') ||
-      (str[offset] >= 'A' && str[offset] <= 'Z') ||
-      str[offset] == '_' {
-      let identifier = "\{str[offset]}"
+    if (str[context.offset] >= 'a' && str[context.offset] <= 'z') ||
+      (str[context.offset] >= 'A' && str[context.offset] <= 'Z') ||
+      str[context.offset] == '_' {
+      let identifier = "\{str[context.offset]}"
       context.offset += 1
       lex_identifier_rest(context, identifier)
       continue
     }
 
-    //²Ù×÷·û
+    //æ“ä½œç¬¦
 
-    //Ë«×Ö½Ú²Ù×÷·û
-    // ==
-    if String::starts_with(str, "==") {
-      array.push(Equ)
-      context.offset += 2
-      continue
-    }
-    // <=
-    if String::starts_with(str, "<=") {
-      array.push(Le)
-      context.offset += 2
-      continue
-    }
-    // ->
-    if String::starts_with(str, "->") {
-      array.push(Arrow)
-      context.offset += 2
-      continue
+    //åŒå­—èŠ‚æ“ä½œç¬¦
+    if context.offset + 1 < str.length() {
+      // ==
+      if str[context.offset] == '=' && str[context.offset + 1] == '=' {
+        context.array.push(Equ)
+        context.offset += 2
+        continue
+      }
+      // <=
+      if str[context.offset] == '<' && str[context.offset + 1] == '=' {
+        context.array.push(Le)
+        context.offset += 2
+        continue
+      }
+      // ->
+      if str[context.offset] == '-' && str[context.offset + 1] == '>' {
+        context.array.push(Arrow)
+        context.offset += 2
+        continue
+      }
     }
 
-    //µ¥×Ö½Ú²Ù×÷·û
-    match str[offset] {
+    //å•å­—èŠ‚æ“ä½œç¬¦
+    match str[context.offset] {
       '+' => {
-        array.push(Add)
+        context.array.push(Add)
         context.offset += 1
         continue
       }
       '-' => {
-        array.push(Sub)
+        context.array.push(Sub)
         context.offset += 1
         continue
       }
       '*' => {
-        array.push(Mul)
+        context.array.push(Mul)
         context.offset += 1
         continue
       }
       '/' => {
-        array.push(Div)
+        context.array.push(Div)
         context.offset += 1
         continue
       }
       '(' => {
-        array.push(Lparen)
+        context.array.push(Lparen)
         context.offset += 1
         continue
       }
       ')' => {
-        array.push(Rparen)
+        context.array.push(Rparen)
         context.offset += 1
         continue
       }
       '.' => {
-        array.push(Dot)
+        context.array.push(Dot)
         context.offset += 1
         continue
       }
       '=' => {
-        array.push(Assign)
+        context.array.push(Assign)
         context.offset += 1
         continue
       }
       '[' => {
-        array.push(Lbracket)
+        context.array.push(Lbracket)
         context.offset += 1
         continue
       }
       ']' => {
-        array.push(Rbracket)
+        context.array.push(Rbracket)
         context.offset += 1
         continue
       }
       '{' => {
-        array.push(Lcurlybracket)
+        context.array.push(Lcurlybracket)
         context.offset += 1
         continue
       }
       '}' => {
-        array.push(Rcurlybracket)
+        context.array.push(Rcurlybracket)
         context.offset += 1
         continue
       }
       ':' => {
-        array.push(Colon)
+        context.array.push(Colon)
         context.offset += 1
         continue
       }
       ';' => {
-        array.push(Semicolon)
+        context.array.push(Semicolon)
         context.offset += 1
         continue
       }
       ',' => {
-        array.push(Comma)
+        context.array.push(Comma)
         context.offset += 1
         continue
       }
     }
 
-		//´íÎó´¦Àí
+    //é”™è¯¯å¤„ç†
   }
 }
 
-
-// Æ¥ÅäµÚÒ»¸öÊı×ÖÖ®ºóµÄÊı×Ö
+// åŒ¹é…ç¬¬ä¸€ä¸ªæ•°å­—ä¹‹åçš„æ•°å­—
 fn lex_number_rest(context : Context, number : String) -> Unit {
-  let { offset, str, array } = context
-  if offset >= str.length() {
-    array.push(Number(@strconv.parse_int?(number).unwrap()))
+  if context.offset >= context.str.length() {
+    context.array.push(Number(@strconv.parse_int?(number).unwrap()))
     return
   }
-  let ch = str[offset]
-	// ÏÂÒ»¸ö×Ö·ûÊÇÊı×Ö£¬¼ÌĞøÆ¥Åä£¬·ñÔò½«ÒÑ»ñµÃµÄÊı×Ö£¨Ä¿Ç°ÒÔStringĞÎÊ½±£´æ£©×ª»¯ÎªInt²¢¹¹ÔìNumber
+  let ch = context.str[context.offset]
+  // ä¸‹ä¸€ä¸ªå­—ç¬¦æ˜¯æ•°å­—ï¼Œç»§ç»­åŒ¹é…ï¼Œå¦åˆ™å°†å·²è·å¾—çš„æ•°å­—ï¼ˆç›®å‰ä»¥Stringå½¢å¼ä¿å­˜ï¼‰è½¬åŒ–ä¸ºIntå¹¶æ„é€ Number
   if ch >= '0' && ch <= '9' {
     context.offset += 1
     lex_number_rest(context, number + ch.to_string())
   } else {
-    array.push(Number(@strconv.parse_int?(number).unwrap()))
+    context.array.push(Number(@strconv.parse_int?(number).unwrap()))
   }
 }
 
-//Æ¥ÅäµÚÒ»¸ö×Ö·ûÖ®ºóµÄ×Ö·û
+//åŒ¹é…ç¬¬ä¸€ä¸ªå­—ç¬¦ä¹‹åçš„å­—ç¬¦
 fn lex_identifier_rest(context : Context, identifier : String) -> Unit {
-  let { offset, str, array } = context
-  if offset >= str.length() {
-    array.push(Identifier(identifier))
+  if context.offset >= context.str.length() {
+    context.array.push(Identifier(identifier))
     return
   }
-  let ch = str[offset]
-	// ÏÂÒ»¸ö×Ö·ûÊÇ×ÖÄ¸¡¢Êı×Ö¡¢ÏÂ»®Ïß£¬¼ÌĞøÆ¥Åä£¬·ñÔò½«ÒÑ»ñµÃµÄ×Ö·û´®¹¹ÔìIdentifier
+  let ch = context.str[context.offset]
+  // ä¸‹ä¸€ä¸ªå­—ç¬¦æ˜¯å­—æ¯ã€æ•°å­—ã€ä¸‹åˆ’çº¿ï¼Œç»§ç»­åŒ¹é…ï¼Œå¦åˆ™å°†å·²è·å¾—çš„å­—ç¬¦ä¸²æ„é€ Identifier
   if (ch >= 'a' && ch <= 'z') ||
     (ch >= 'A' && ch <= 'Z') ||
     (ch >= '0' && ch <= '9') ||
@@ -221,18 +220,8 @@ fn lex_identifier_rest(context : Context, identifier : String) -> Unit {
     context.offset += 1
     lex_identifier_rest(context, identifier + ch.to_string())
   } else {
-    array.push(Identifier(identifier))
+    context.array.push(Identifier(identifier))
   }
 }
 
-// TODO: ¼ìË÷Identifier£¬ÅĞ¶ÏÊÇ·ñÎªkeyword²¢ĞŞ¸Ä¶ÔÓ¦µÄToken
-
-test {
-  let array = []
-  lex({ str: "-10123 -+ - 523", offset: 0, array })
-  inspect!(
-    array,
-    content="[Sub, Number(10123), Sub, Add, Sub, Number(523), Number(103), LParen, Number(5), RParen, RParen]",
-  )
-}
-
+// TODO: æ£€ç´¢Identifierï¼Œåˆ¤æ–­æ˜¯å¦ä¸ºkeywordå¹¶ä¿®æ”¹å¯¹åº”çš„Token
