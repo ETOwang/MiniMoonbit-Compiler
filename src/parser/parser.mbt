@@ -61,6 +61,44 @@ pub enum Type {
 
 // top_level: top_let_decl | toplevel_fn_decl
 
+// value_expr:
+//  unit_expr: '(' ')'
+//  | tuple_expr '(' expr (',' expr)+ ')'
+//  | bool_expr  'true' | 'false'
+//  | identifier_expr IDENTIFIER
+//  | block_expr '{' stmt '}'
+//  | neg_expr  '-' value_expr
+//  | floating_point_expr NUMBER '.' NUMBER?
+//  | int_expr NUMBER
+//  | not_expr 'not' '(' expr ')'
+//  | array_make_expr 'Array' ':' ':' 'make' '(' expr ',' expr ')'
+fn value_expr(
+  rest : ArrayView[@lex.Token]
+) -> (@types.Syntax, ArrayView[@lex.Token]) {
+  let mut rest = rest
+  match rest[0] { //对应上方规则，判断是哪一种value_expr
+    @lex.Lparen => { 
+      match rest[1] {
+        @lex.Rparen => unit_expr(rest)
+        _ => tuple_expr(rest) 
+      }
+    }
+    @lex.Lcurlybracket => block_expr(rest)
+    @lex.True | @lex.False => bool_expr(rest)
+    @lex.Sub => neg_expr(rest)
+    @lex.Number(n) => {
+      match rest[1] {
+        @lex.Dot => floating_point_expr(rest)
+        _ => int_expr(rest)
+      }
+    }
+    @lex.Not => not_expr(rest)
+    @lex.Array => array_make_expr(rest)
+    @lex.Identifier(str) => identifier_expr(rest)
+    _ => @util.die("wrong value_expr")
+  }
+}
+
 // unit_expr: '(' ')'; // ()
 fn unit_expr(
   rest : ArrayView[@lex.Token]
@@ -72,12 +110,15 @@ fn unit_expr(
 }
 
 // tuple_expr: '(' expr (',' expr)+ ')'; // (x, y); 1-tuple is not allowed
-fn tuple_expr(rest: ArrayView[@lex.Token]) -> (@types.Syntax, ArrayView[@lex.Token]) {
+fn tuple_expr(
+  rest: ArrayView[@lex.Token]
+) -> (@types.Syntax, ArrayView[@lex.Token]) {
   let mut rest = rest
   rest = skip(rest, @lex.Lparen).1
-  let mut (syn, rest) = expr(rest)
+  let (syn, rest) = expr(rest)
+  let mut rest = rest
   let mut arr = Array::new()
-  arr.push(x)
+  arr.push(syn)
   while skip(rest, @lex.Comma).0 {
     let x: @types.Syntax = expr(rest).0
     arr.push(x)
@@ -87,10 +128,13 @@ fn tuple_expr(rest: ArrayView[@lex.Token]) -> (@types.Syntax, ArrayView[@lex.Tok
 }
 
 // block_expr: '{' stmt '}'; // { blah; blah; }
-fn block_expr(rest: ArrayView[@lex.Token]) -> (@types.Syntax, ArrayView[@lex.Token]) {
+fn block_expr(
+  rest: ArrayView[@lex.Token]
+) -> (@types.Syntax, ArrayView[@lex.Token]) {
   let mut rest = rest
   rest = skip(rest, @lex.Lcurlybracket).1
-  let mut (syn, rest) = stmt(rest)
+  let (syn, rest) = stmt(rest)
+  let mut rest = rest
   rest = skip(rest, @lex.Rcurlybracket).1
   (syn, rest)
 }
@@ -106,36 +150,90 @@ fn bool_expr(
 }
 
 // neg_expr: '-' value_expr;
-fn neg_expr(rest: ArrayView[@lex.Token]) -> (@types.Syntax, ArrayView[@lex.Token]) {
+fn neg_expr(
+  rest: ArrayView[@lex.Token]
+) -> (@types.Syntax, ArrayView[@lex.Token]) {
   let mut rest = rest
-  rest = skip(rest, @lex.Not).1
-  let mut (syn, rest) = value_expr(rest)
-  (@types.Syntax::Neg(syn, _), rest)
+  rest = skip(rest, @lex.Sub).1
+  let (syn, rest) = value_expr(rest)
+  (@types.Syntax::Neg(syn, kind=None), rest)
 }
 
 // floating_point_expr: NUMBER '.' NUMBER?
-fn floating_point_expr(rest: ArrayView[@lex.Token]) -> (@types.Syntax, ArrayView[@lex.Token]) {
+fn floating_point_expr(
+  rest : ArrayView[@lex.Token]
+) -> (@types.Syntax, ArrayView[@lex.Token]) {
   let mut rest = rest
-  let value1 = Int::to_double( match rest[0] {
-    @lex.Number(n) => n
-    _ => @util.die("expected num")
-  })
+  let value1 = Int::to_double(
+    match rest[0] {
+      @lex.Number(n) => n
+      _ => @util.die("expected num")
+    },
+  )
   rest = skip(rest, @lex.Dot).1
   let value2 = match rest[0] {
     @lex.Number(n) => n
-    _ => @util.die("expected num")
+    _ => 0
   }
   let mut decimal = Int::to_double(value2)
   while decimal > 1 {
     decimal = decimal / 10
   }
-  let val: Double = value1 + decimal
+  let val : Double = value1 + decimal
   (@types.Syntax::Double(val), rest)
 }
 
 // int_expr: NUMBER
-fn int_expr(rest: ArrayView[@lex.Token]) -> (@types.Syntax, ArrayView[@lex.Token]) {
-  
+fn int_expr(
+  rest : ArrayView[@lex.Token]
+) -> (@types.Syntax, ArrayView[@lex.Token]) {
+  let mut rest = rest
+  let value = match rest[0] {
+    @lex.Number(n) => n
+    _ => @util.die("expect num")
+  }
+  (@types.Syntax::Int(value), rest[1:])
+}
+
+// not_expr: 'not' '(' expr ')'
+fn not_expr(
+  rest: ArrayView[@lex.Token]
+) -> (@types.Syntax, ArrayView[@lex.Token]) {
+  let mut rest = rest
+  rest = skip(rest, @lex.Not).1
+  rest = skip(rest, @lex.Lparen).1
+  let (syn, rest) = expr(rest)
+  let mut rest = skip(rest, @lex.Rparen).1
+  (@types.Syntax::Not(syn), rest)
+}
+
+// array_make_expr: 'Array' ':' ':' 'make' '(' expr ',' expr ')'
+fn array_make_expr(
+  rest: ArrayView[@lex.Token]
+) -> (@types.Syntax, ArrayView[@lex.Token]) {
+  let mut rest = rest
+  rest = skip(rest, @lex.Array).1
+  rest = skip(rest, @lex.Colon).1
+  rest = skip(rest, @lex.Colon).1
+  rest = skip(rest, @lex.Make).1
+  rest = skip(rest, @lex.Lparen).1
+  let (syn1, rest) = expr(rest)
+  let mut rest = skip(rest, @lex.Comma).1
+  let (syn2, rest) = expr(rest)
+  let mut rest = skip(rest, @lex.Rparen).1
+  (@types.Syntax::Array(syn1, syn2), rest)
+}
+
+// identifier_expr: IDENTIFIER
+fn identifier_expr(
+  rest : ArrayView[@lex.Token]
+) -> (@types.Syntax, ArrayView[@lex.Token]) {
+  let mut rest = rest
+  let str = match rest[0] {
+    @lex.Identifier(s) => s
+    _ => @util.die("expected string")
+  }
+  (@types.Syntax::Var(str), rest[1:])
 }
 
 // 跳过rest中的第一个token，返回剩下的token

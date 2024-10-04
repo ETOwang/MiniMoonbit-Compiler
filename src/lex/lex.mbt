@@ -7,6 +7,7 @@ pub enum Token {
   Int //'Int'
   Double //'Double'
   Array // 'Array'
+  Make // 'make'
   Not // 'not'
   If // 'if'
   Else // 'else'
@@ -185,6 +186,9 @@ pub fn lex(context : Context) -> Unit {
         context.offset += 1
         continue
       }
+      _ => {
+        @util.die("unkown token")
+      }
     }
 
     //错误处理
@@ -235,6 +239,10 @@ fn lex_identifier_rest(context : Context, identifier : String) -> Unit {
 // TODO: 检索Identifier，判断是否为keyword并修改对应的Token
 fn isKeyWord(context: Context, identifier : String) -> Bool {
 	match identifier {
+    "make" => {
+      context.array.push(Make)
+      return true
+    }
 		"true" => {
 			context.array.push(True)
 			return true
