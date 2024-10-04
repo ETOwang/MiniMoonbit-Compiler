@@ -1,5 +1,5 @@
 // Token Kinds
-enum Token {
+pub enum Token {
   True //'true'
   False //'false'
   Unit //'Unit'
