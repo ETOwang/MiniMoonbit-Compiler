@@ -61,6 +61,98 @@ pub enum Type {
 
 // top_level: top_let_decl | toplevel_fn_decl
 
+// Expressions, in order of precedence.
+// expr: // not associative
+// add_sub_level_expr '==' add_sub_level_expr
+// | add_sub_level_expr '<=' add_sub_level_expr
+// | add_sub_level_expr;
+fn expr(
+  rest : ArrayView[@lex.Token]
+) -> (@types.Syntax, ArrayView[@lex.Token]) {
+  let (syn1, new_rest) = add_sub_level_expr(rest)
+  let mut rest = new_rest
+  let mut syn = syn1
+  match rest[0] {
+    @lex.Equ => {
+      rest = skip(rest, @lex.Equ)
+      let (syn2, new_rest) = add_sub_level_expr(rest)
+      rest = new_rest
+      syn = @types.Syntax::Eq(syn1, syn2)
+    }
+    @lex.Le => {
+      rest = skip(rest, @lex.Le)
+      let (syn2, new_rest) = add_sub_level_expr(rest)
+      rest = new_rest
+      syn = @types.Syntax::LE(syn1, syn2)
+    }
+  }
+  (syn, rest)
+}
+
+// add_sub_level_expr: // left associative
+//  add_sub_level_expr '+' mul_div_level_expr
+// | add_sub_level_expr '-' mul_div_level_expr
+// | mul_div_level_expr;
+fn add_sub_level_expr(
+  rest : ArrayView[@lex.Token]
+) -> (@types.Syntax, ArrayView[@lex.Token]) {
+  let (left_syntax, new_rest) = mul_div_level_expr(rest)
+  let mut rest = new_rest
+  let mut left_syntax = left_syntax 
+  while true {
+    match rest[0] {
+      @lex.Add => {
+        rest = skip(rest, @lex.Add)
+        let (expr, new_rest) = mul_div_level_expr(rest)
+        rest = new_rest
+        left_syntax = @types.Syntax::Prim(left_syntax, expr, Add, kind=None)
+        continue
+      }
+      @lex.Sub => {
+        rest = skip(rest, @lex.Sub)
+        let (expr, new_rest) = mul_div_level_expr(rest)
+        rest = new_rest
+        left_syntax = @types.Syntax::Prim(left_syntax, expr, Sub, kind=None)
+        continue
+      }
+      _ => break
+    }
+  }
+  (left_syntax, rest)
+}
+
+// mul_div_level_expr: // left associative
+// mul_div_level_expr '*' if_level_expr
+// | mul_div_level_expr '/' if_level_expr
+// | if_level_expr;
+fn mul_div_level_expr(
+  rest : ArrayView[@lex.Token]
+) -> (@types.Syntax, ArrayView[@lex.Token]) {
+  let (left_syntax, new_rest) = if_level_expr(rest)
+  let mut rest = new_rest
+  let mut left_syntax = left_syntax
+  while true {
+    match rest[0] {
+      @lex.Mul => {
+        rest = skip(rest, @lex.Mul)
+        let (expr, new_rest) = if_level_expr(rest)
+        rest = new_rest
+        left_syntax = @types.Syntax::Prim(left_syntax, expr, Mul, kind=None)
+        continue
+      }
+      @lex.Div => {
+        rest = skip(rest, @lex.Div)
+        let (expr, new_rest) = if_level_expr(rest)
+        rest = new_rest
+        left_syntax = @types.Syntax::Prim(left_syntax, expr, Div, kind=None)
+        continue
+      }
+      _ => break
+    }
+  }
+  (left_syntax, rest)
+}
+
 
 // if_level_expr: get_or_apply_level_expr | if_expr
 fn if_level_expr(
@@ -238,7 +330,7 @@ fn neg_expr(
   let mut rest = rest
   rest = skip(rest, @lex.Sub) // '-'
   let (syn, rest) = value_expr(rest) // value_expr
-  (@types.Syntax::Neg(syn, kind=None), rest)
+  (@types.Syntax::Neg(syn, kind=None), rest) // Kind ? 
 }
 
 // floating_point_expr: NUMBER '.' NUMBER?
