@@ -61,6 +61,38 @@ pub enum Type {
 
 // top_level: top_let_decl | toplevel_fn_decl
 
+
+// if_level_expr: get_or_apply_level_expr | if_expr
+fn if_level_expr(
+  rest : ArrayView[@lex.Token]
+) -> (@types.Syntax, ArrayView[@lex.Token]) {
+  let mut rest = rest
+  match rest[0] {
+    @lex.If => if_expr(rest)
+    _ => get_or_apply_level_expr(rest)
+  }
+}
+
+// if_expr: 'if' expr block_expr ('else' block_expr)?
+fn if_expr(
+  rest : ArrayView[@lex.Token]
+) -> (@types.Syntax, ArrayView[@lex.Token]) {
+  let mut rest = rest
+  rest = skip(rest, @lex.If)
+  let (cond_expr, new_rest) = expr(rest)
+  rest = new_rest
+  let (if_block, new_rest) = block_expr(rest)
+  rest = new_rest
+  let mut else_block = @types.Syntax::Unit
+  if checkToken(rest, @lex.Else) {
+    rest = skip(rest, @lex.Else) 
+    let (new_else_block, new_rest) = block_expr(rest)
+    rest = new_rest
+    else_block = new_else_block
+  }
+  (@types.Syntax::If(cond_expr, if_block, else_block), rest)
+}
+
 // get_or_apply_level_expr:
 //  value_expr # value_expr_
 // x[y]
@@ -75,28 +107,28 @@ fn get_or_apply_level_expr(
   while true { 
     match rest[0] {
       @lex.Lbracket => { // get_or_apply_level_expr '[' expr ']'
-        rest = skip(rest, @lex.Lbracket).1 // '['
+        rest = skip(rest, @lex.Lbracket) // '['
         let (exp_syn, new_rest) = expr(rest) // expr
         rest = new_rest
-        rest = skip(rest, @lex.Rbracket).1 // ']'
+        rest = skip(rest, @lex.Rbracket) // ']'
         let syn = @types.Syntax::Get(syn, exp_syn)
         continue
       }
       @lex.Lparen => { // get_or_apply_level_expr '(' (expr (',' expr)*)? ')'
-        rest = skip(rest, @lex.Lparen).1 // '('
+        rest = skip(rest, @lex.Lparen) // '('
         let mut args = []
-        if not(skip(rest, @lex.Rparen).0) { // 如果括号中存在参数
+        if not(checkToken(rest, @lex.Rparen)) { // 如果括号中存在参数
           let (exp, new_rest) = expr(rest) // 解析第一个参数
           args.push(exp)
           rest = new_rest
-          while skip(rest, @lex.Comma).0 { // (',' expr)* 解析后续参数
+          while checkToken(rest, @lex.Comma) { // (',' expr)* 解析后续参数
             rest = rest[1:] // 跳过 ','
             let (exp, new_rest) = expr(rest)  
             args.push(exp)
             rest = new_rest
           }
         }
-        rest = skip(rest, @lex.Rparen).1
+        rest = skip(rest, @lex.Rparen)
         let syn = @types.Syntax::App(syn, args)
         continue
       }
@@ -149,8 +181,8 @@ fn unit_expr(
   rest : ArrayView[@lex.Token]
 ) -> (@types.Syntax, ArrayView[@lex.Token]) {
   let mut rest = rest
-  rest = skip(rest, @lex.Lparen).1 //'('
-  rest = skip(rest, @lex.Rparen).1 // ')'
+  rest = skip(rest, @lex.Lparen) //'('
+  rest = skip(rest, @lex.Rparen) // ')'
   (@types.Syntax::Unit, rest)
 }
 
@@ -159,20 +191,21 @@ fn tuple_expr(
   rest: ArrayView[@lex.Token]
 ) -> (@types.Syntax, ArrayView[@lex.Token]) {
   let mut rest = rest
-  rest = skip(rest, @lex.Lparen).1 // '('
-  let (syn, rest) = expr(rest) // expr
-  let mut rest = rest // 让rest为可修改参数
+  rest = skip(rest, @lex.Lparen) // '('
+  let (syn, new_rest) = expr(rest) // expr
+  rest = new_rest // 让rest为可修改参数
   let mut arr = Array::new() // (',' expr)+
   arr.push(syn)
-  while skip(rest, @lex.Comma).0 {
+  while checkToken(rest, @lex.Comma) {
     rest = rest[1:]
-    let x: @types.Syntax = expr(rest).0
+    let (x, new_rest) = expr(rest)
+    rest = new_rest
     arr.push(x)
   }
   if arr.length() < 2 { // 1-tuple is not allowed
     @util.die("1-tuple is not allowed")
   }
-  rest = skip(rest, @lex.Rparen).1 // ')'
+  rest = skip(rest, @lex.Rparen) // ')'
   (@types.Syntax::Tuple(arr), rest)
 }
 
@@ -181,10 +214,10 @@ fn block_expr(
   rest: ArrayView[@lex.Token]
 ) -> (@types.Syntax, ArrayView[@lex.Token]) {
   let mut rest = rest
-  rest = skip(rest, @lex.Lcurlybracket).1 // '{'
+  rest = skip(rest, @lex.Lcurlybracket) // '{'
   let (syn, rest) = stmt(rest) // stmt
   let mut rest = rest
-  rest = skip(rest, @lex.Rcurlybracket).1 // '}'
+  rest = skip(rest, @lex.Rcurlybracket) // '}'
   (syn, rest)
 }
 
@@ -203,7 +236,7 @@ fn neg_expr(
   rest: ArrayView[@lex.Token]
 ) -> (@types.Syntax, ArrayView[@lex.Token]) {
   let mut rest = rest
-  rest = skip(rest, @lex.Sub).1 // '-'
+  rest = skip(rest, @lex.Sub) // '-'
   let (syn, rest) = value_expr(rest) // value_expr
   (@types.Syntax::Neg(syn, kind=None), rest)
 }
@@ -219,7 +252,7 @@ fn floating_point_expr(
       _ => @util.die("expected num")
     },
   )
-  rest = skip(rest, @lex.Dot).1 // '.'
+  rest = skip(rest, @lex.Dot) // '.'
   let value2 = match rest[0] { // Number2
     @lex.Number(n) => n
     _ => 0 // Number2 可以没有
@@ -249,10 +282,10 @@ fn not_expr(
   rest: ArrayView[@lex.Token]
 ) -> (@types.Syntax, ArrayView[@lex.Token]) {
   let mut rest = rest
-  rest = skip(rest, @lex.Not).1 // 'not'
-  rest = skip(rest, @lex.Lparen).1 // '('
+  rest = skip(rest, @lex.Not) // 'not'
+  rest = skip(rest, @lex.Lparen) // '('
   let (syn, rest) = expr(rest) // expr
-  let mut rest = skip(rest, @lex.Rparen).1 // ')'
+  let mut rest = skip(rest, @lex.Rparen) // ')'
   (@types.Syntax::Not(syn), rest)
 }
 
@@ -261,15 +294,15 @@ fn array_make_expr(
   rest: ArrayView[@lex.Token]
 ) -> (@types.Syntax, ArrayView[@lex.Token]) {
   let mut rest = rest
-  rest = skip(rest, @lex.Array).1 // 'Array'
-  rest = skip(rest, @lex.Colon).1 // ':'
-  rest = skip(rest, @lex.Colon).1 // ':'
-  rest = skip(rest, @lex.Make).1 // 'make'
-  rest = skip(rest, @lex.Lparen).1 // '('
+  rest = skip(rest, @lex.Array) // 'Array'
+  rest = skip(rest, @lex.Colon) // ':'
+  rest = skip(rest, @lex.Colon) // ':'
+  rest = skip(rest, @lex.Make) // 'make'
+  rest = skip(rest, @lex.Lparen) // '('
   let (syn1, rest) = expr(rest) // expr
-  let mut rest = skip(rest, @lex.Comma).1 // ','
+  let mut rest = skip(rest, @lex.Comma) // ','
   let (syn2, rest) = expr(rest) // expr
-  let mut rest = skip(rest, @lex.Rparen).1 //')'
+  let mut rest = skip(rest, @lex.Rparen) //')'
   (@types.Syntax::Array(syn1, syn2), rest)
 }
 
@@ -289,9 +322,19 @@ fn identifier_expr(
 fn skip(
   rest : ArrayView[@lex.Token],
   tk : @lex.Token
-) -> (Bool, ArrayView[@lex.Token]) {
+) -> ArrayView[@lex.Token] {
   match rest[0] {  
-    tk => (true, rest[1:]) // 当前ArrayView中第一个Token与tk匹配时进行跳过，返回true + 新ArrayView
-    _ => (false, rest) // 否则返回false + 原ArrayView
+    tk => rest[1:]// 当前ArrayView中第一个Token与tk匹配时进行跳过，返回 新ArrayView
+    _ => rest // 否则返回 原ArrayView
+  }
+}
+
+fn checkToken(
+  rest: ArrayView[@lex.Token], 
+  token: @lex.Token
+) -> Bool {
+  match rest[0] {
+    token => true
+    _ => false
   }
 }
