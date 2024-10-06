@@ -57,9 +57,54 @@ pub enum Type {
 } derive(Show)
 
 // prog: top_level* EOF
-// ÔÚ AST ÉÏÊµ¼ÊÓë·Ç¶¥¼¶µÄ stmt ÏàÍ¬£¬²¢ÇÒĞèÒªÔÚ½áÎ²²¹ÉÏÒ»¸ö Unit
+// åœ¨ AST ä¸Šå®é™…ä¸éé¡¶çº§çš„ stmt ç›¸åŒï¼Œå¹¶ä¸”éœ€è¦åœ¨ç»“å°¾è¡¥ä¸Šä¸€ä¸ª Unit
 
 // top_level: top_let_decl | toplevel_fn_decl
+
+// get_or_apply_level_expr:
+//  value_expr # value_expr_
+// x[y]
+//  | get_or_apply_level_expr '[' expr ']' # get_expr_   
+// f(x, y)
+//  | get_or_apply_level_expr '(' (expr (',' expr)*)? ')' # apply_expr;
+fn get_or_apply_level_expr(
+  rest : ArrayView[@lex.Token]
+) -> (@types.Syntax, ArrayView[@lex.Token]) {
+  let (syn, new_rest) = value_expr(rest) //value_expr
+  let mut rest = rest
+  while true { 
+    match rest[0] {
+      @lex.Lbracket => { // get_or_apply_level_expr '[' expr ']'
+        rest = skip(rest, @lex.Lbracket).1 // '['
+        let (exp_syn, new_rest) = expr(rest) // expr
+        rest = new_rest
+        rest = skip(rest, @lex.Rbracket).1 // ']'
+        let syn = @types.Syntax::Get(syn, exp_syn)
+        continue
+      }
+      @lex.Lparen => { // get_or_apply_level_expr '(' (expr (',' expr)*)? ')'
+        rest = skip(rest, @lex.Lparen).1 // '('
+        let mut args = []
+        if not(skip(rest, @lex.Rparen).0) { // å¦‚æœæ‹¬å·ä¸­å­˜åœ¨å‚æ•°
+          let (exp, new_rest) = expr(rest) // è§£æç¬¬ä¸€ä¸ªå‚æ•°
+          args.push(exp)
+          rest = new_rest
+          while skip(rest, @lex.Comma).0 { // (',' expr)* è§£æåç»­å‚æ•°
+            rest = rest[1:] // è·³è¿‡ ','
+            let (exp, new_rest) = expr(rest)  
+            args.push(exp)
+            rest = new_rest
+          }
+        }
+        rest = skip(rest, @lex.Rparen).1
+        let syn = @types.Syntax::App(syn, args)
+        continue
+      }
+      _ => break
+    }
+  }
+  (syn, rest)
+}
 
 // value_expr:
 //  unit_expr: '(' ')'
@@ -76,7 +121,7 @@ fn value_expr(
   rest : ArrayView[@lex.Token]
 ) -> (@types.Syntax, ArrayView[@lex.Token]) {
   let mut rest = rest
-  match rest[0] { //¶ÔÓ¦ÉÏ·½¹æÔò£¬ÅĞ¶ÏÊÇÄÄÒ»ÖÖvalue_expr
+  match rest[0] { //å¯¹åº”ä¸Šæ–¹è§„åˆ™ï¼Œåˆ¤æ–­æ˜¯å“ªä¸€ç§value_expr
     @lex.Lparen => { 
       match rest[1] {
         @lex.Rparen => unit_expr(rest)
@@ -116,10 +161,11 @@ fn tuple_expr(
   let mut rest = rest
   rest = skip(rest, @lex.Lparen).1 // '('
   let (syn, rest) = expr(rest) // expr
-  let mut rest = rest // ÈÃrestÎª¿ÉĞŞ¸Ä²ÎÊı
+  let mut rest = rest // è®©restä¸ºå¯ä¿®æ”¹å‚æ•°
   let mut arr = Array::new() // (',' expr)+
   arr.push(syn)
   while skip(rest, @lex.Comma).0 {
+    rest = rest[1:]
     let x: @types.Syntax = expr(rest).0
     arr.push(x)
   }
@@ -167,7 +213,7 @@ fn floating_point_expr(
   rest : ArrayView[@lex.Token]
 ) -> (@types.Syntax, ArrayView[@lex.Token]) {
   let mut rest = rest
-  let value1 = Int::to_double( // Number1, ×ª»»ÎªdoubleÀàĞÍ
+  let value1 = Int::to_double( // Number1, è½¬æ¢ä¸ºdoubleç±»å‹
     match rest[0] {
       @lex.Number(n) => n
       _ => @util.die("expected num")
@@ -176,10 +222,10 @@ fn floating_point_expr(
   rest = skip(rest, @lex.Dot).1 // '.'
   let value2 = match rest[0] { // Number2
     @lex.Number(n) => n
-    _ => 0 // Number2 ¿ÉÒÔÃ»ÓĞ
+    _ => 0 // Number2 å¯ä»¥æ²¡æœ‰
   }
-  let mut decimal = Int::to_double(value2) // Number2 ×ª»¯ÎªĞ¡Êı
-  while decimal > 1 {  // ÀıÈç£º 12.57 --> Number1 = 12, Number2 = 57 --> 12 + 0.57
+  let mut decimal = Int::to_double(value2) // Number2 è½¬åŒ–ä¸ºå°æ•°
+  while decimal > 1 {  // ä¾‹å¦‚ï¼š 12.57 --> Number1 = 12, Number2 = 57 --> 12 + 0.57
     decimal = decimal / 10
   }
   let val : Double = value1 + decimal 
@@ -195,7 +241,7 @@ fn int_expr(
     @lex.Number(n) => n
     _ => @util.die("expect num")
   }
-  (@types.Syntax::Int(value), rest[1:]) // Ä£Ê½Æ¥Åä²»»á½øĞĞskip£¬×îºóĞèÒªÊÖ¶¯ÒÆ¶¯ArrayView
+  (@types.Syntax::Int(value), rest[1:]) // æ¨¡å¼åŒ¹é…ä¸ä¼šè¿›è¡Œskipï¼Œæœ€åéœ€è¦æ‰‹åŠ¨ç§»åŠ¨ArrayView
 }
 
 // not_expr: 'not' '(' expr ')'
@@ -236,16 +282,16 @@ fn identifier_expr(
     @lex.Identifier(s) => s
     _ => @util.die("expected string")
   }
-  (@types.Syntax::Var(str), rest[1:]) // Ä£Ê½Æ¥Åä²»»á½øĞĞskip£¬×îºóĞèÒªÊÖ¶¯ÒÆ¶¯ArrayView
+  (@types.Syntax::Var(str), rest[1:]) // æ¨¡å¼åŒ¹é…ä¸ä¼šè¿›è¡Œskipï¼Œæœ€åéœ€è¦æ‰‹åŠ¨ç§»åŠ¨ArrayView
 }
 
-// Ï£ÍûÌø¹ırestÖĞµÄµÚÒ»¸ötoken²»´¦Àí£¬·µ»ØÊ£ÏÂµÄtoken
+// å¸Œæœ›è·³è¿‡restä¸­çš„ç¬¬ä¸€ä¸ªtokenä¸å¤„ç†ï¼Œè¿”å›å‰©ä¸‹çš„token
 fn skip(
   rest : ArrayView[@lex.Token],
   tk : @lex.Token
 ) -> (Bool, ArrayView[@lex.Token]) {
   match rest[0] {  
-    tk => (true, rest[1:]) // µ±Ç°ArrayViewÖĞµÚÒ»¸öTokenÓëtkÆ¥ÅäÊ±½øĞĞÌø¹ı£¬·µ»Øtrue + ĞÂArrayView
-    _ => (false, rest) // ·ñÔò·µ»Øfalse + Ô­ArrayView
+    tk => (true, rest[1:]) // å½“å‰ArrayViewä¸­ç¬¬ä¸€ä¸ªTokenä¸tkåŒ¹é…æ—¶è¿›è¡Œè·³è¿‡ï¼Œè¿”å›true + æ–°ArrayView
+    _ => (false, rest) // å¦åˆ™è¿”å›false + åŸArrayView
   }
 }
