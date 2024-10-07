@@ -56,11 +56,100 @@ pub enum Type {
   Ptr
 } derive(Show)
 
-// prog: top_level* EOF
-// 在 AST 上实际与非顶级的 stmt 相同，并且需要在结尾补上一个 Unit
+// main_fn_decl: 'fn' ('main' | 'init') fn_body;
+fn main_fn_decl(
+  rest : ArrayView[@lex.Token]
+) -> (@types.Fundef, ArrayView[@lex.Token]) {
+  let mut rest = skip(rest, @lex.Fn)
+  let name = match rest[0] {
+    @lex.Identifier("main") => "main"
+    @lex.Identifier("init") => "init"
+    _ => @util.die("Expected 'main' or 'init'")
+  }
+  rest = skip(rest, @lex.Identifier(name))
+  let (body, rest) = fn_body(rest)
+  let params = []
+  let return_type = @types.Syntax::Unit
+  let fundef = @types.Fundef ( // TOCHECK: 我不理解这里为什么报错，文档里就是这样构造结构体的
+    (name, return_type),
+    params,
+    body
+  )
+  
+  (fundef, rest)
+}
 
-// top_level: top_let_decl | toplevel_fn_decl
+// top_fn_decl:
+// 'fn' IDENTIFIER '(' param_list? ')' '->' type fn_body
+fn top_fn_decl(
+  rest : ArrayView[@lex.Token]
+) -> (@types.Fundef, ArrayView[@lex.Token]) {
+  let mut rest = skip(rest, @lex.Fn)
 
+  let name = match rest[0] {
+    @lex.Identifier(str) => str
+    _ => @util.die("Expected function name")
+  }
+  rest = skip(rest, @lex.Identifier(name))
+
+  rest = skip(rest, @lex.Lparen)
+
+  let mut params = []
+  if not(checkToken(rest, @lex.Rparen)) {
+    let (param_list, new_rest) = param_list(rest)
+    params = param_list
+    rest = new_rest
+  }
+
+  rest = skip(rest, @lex.Rparen)
+  rest = skip(rest, @lex.Arrow)
+  let (return_type, rest) = type_annotation(rest)
+  let (body, rest) = fn_body(rest)
+  
+  let fundef = @types.Fundef ( // TOCHECK: 我不理解这里为什么报错，文档里就是这样构造结构体的
+    (name, return_type),
+    params,
+    body
+  )
+  
+  (fundef, rest)
+}
+
+// param_list: param (',' param)*
+fn param_list(
+  rest : ArrayView[@lex.Token]
+) -> (Array[(String, @types.Type)], ArrayView[@lex.Token]) {
+  let mut rest = rest
+  let mut params = []
+
+  let (param, new_rest) = param(rest)
+  params.push(param)
+  rest = new_rest
+
+  while checkToken(rest, @lex.Comma) {
+    rest = skip(rest, @lex.Comma)
+    let (param, new_rest) = param(rest)
+    params.push(param)
+    rest = new_rest
+  }
+
+  (params, rest)
+}
+
+// param: IDENTIFIER type_annotation
+fn param(
+  rest : ArrayView[@lex.Token]
+) -> ((String, @types.Type), ArrayView[@lex.Token]) {
+  let mut rest = rest
+  let name = match rest[0] {
+    @lex.Identifier(str) => str
+    _ => @util.die("Expected identifier")
+  }
+  rest = skip(rest, @lex.Identifier(name))
+
+  let (ty, rest) = type_annotation(rest)
+  ((name, ty), rest)
+}
 
 // fn_body: '{' stmt '}'
 fn fn_body(
@@ -110,11 +199,11 @@ fn nontop_fn_decl(
   let (body, new_rest) = fn_body(rest)
   rest = new_rest
 
-  let fundef = @types.Fundef { // TOCHECK: 我不理解这里为什么报错，文档里就是这样构造结构体的
-    name,
+  let fundef = @types.Fundef ( // TOCHECK: 我不理解这里为什么报错，文档里就是这样构造结构体的
+    (name, ret_ty),
     args,
     body
-  }
+  )
 
   (fundef, rest)
 }
