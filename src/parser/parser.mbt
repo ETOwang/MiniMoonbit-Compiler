@@ -111,9 +111,9 @@ fn nontop_fn_decl(
   rest = new_rest
 
   let fundef = @types.Fundef { // TOCHECK: 我不理解这里为什么报错，文档里就是这样构造结构体的
-    name: (name, ret_ty),
-    args: args,
-    body: body
+    name,
+    args,
+    body
   }
 
   (fundef, rest)
@@ -160,9 +160,129 @@ fn nontop_param(
   ((name, param_type), rest)
 }
 
+// stmt:
+// let_tuple_stmt
+// | let_stmt
+// | fn_decl_stmt
+// | assign_stmt
+// | expr_stmt;
+fn stmt(
+  rest : ArrayView[@lex.Token]
+) -> (@types.Syntax, ArrayView[@lex.Token]) {
+  let mut rest = rest
+
+  match rest[0] {
+    @lex.Let => match rest[1] {
+      @lex.Lparen => let_tuple_stmt(rest)
+      _ => let_stmt(rest)
+    }
+    @lex.Fn => fn_decl_stmt(rest)
+    _ => {
+      let mut tmp_rest = get_expr(rest).1
+      if checkToken(tmp_rest, @lex.Equ) {
+        assign_stmt(rest)
+      }
+      else {
+        expr_stmt(rest)
+      }
+    }
+  }
+}
+
+
+// let_tuple_stmt:
+// 'let' '(' IDENTIFIER (',' IDENTIFIER)* ')' type_annotation? '=' expr ';' stmt;
+// LetTuple(Array[(String, Type)], Syntax, Syntax)
+fn let_tuple_stmt(
+  rest : ArrayView[@lex.Token]
+) -> (@types.Syntax, ArrayView[@lex.Token]) {
+  let mut rest = skip(rest, @lex.Let)
+  rest = skip(rest, @lex.Lparen)
+  
+  // 解析标识符列表
+  let mut identifiers = []
+  let name = match rest[0] {
+    @lex.Identifier(str) => str
+    _ => @util.die("Expected identifier")
+  }
+  identifiers.push(name)
+  rest = skip(rest, @lex.Identifier(name))
+  
+  while checkToken(rest, @lex.Comma) {
+    rest = skip(rest, @lex.Comma)
+    let name = match rest[0] {
+      @lex.Identifier(str) => str
+      _ => @util.die("Expected identifier")
+    }
+    identifiers.push(name)
+    rest = skip(rest, @lex.Identifier(name))
+  }
+  
+  rest = skip(rest, @lex.Rparen)
+  
+  let mut ty_arr = []
+  if checkToken(rest, @lex.Colon) {
+    rest = skip(rest, @lex.Colon)
+    let (ty, new_rest) = type_annotation(rest)
+    rest = new_rest
+    match ty {
+      @types.Type::Tuple(arr) => ty_arr = arr
+    }
+  } 
+  let ident_arr = []
+  let mut i = 0
+  while i < identifiers.length() {
+    ident_arr.push((identifiers[i], ty_arr[i]))
+    i = i + 1
+  }
+
+  rest = skip(rest, @lex.Equ)
+
+  let (expr_syntax, new_rest) = expr(rest)
+  rest = new_rest
+
+  rest = skip(rest, @lex.Semicolon)
+
+  let (stmt_syntax, new_rest) = stmt(rest)
+  rest = new_rest
+
+  (@types.Syntax::LetTuple(ident_arr, expr_syntax, stmt_syntax), rest)
+}
+
+// let_stmt:
+// 'let' IDENTIFIER type_annotation? '=' expr ';' stmt;
+// let_stmt:
+// 'let' IDENTIFIER type_annotation? '=' expr ';' stmt;
+fn let_stmt(
+  rest : ArrayView[@lex.Token]
+) -> (@types.Syntax, ArrayView[@lex.Token]) {
+  let mut rest = skip(rest, @lex.Let)
+
+  let name = match rest[0] {
+    @lex.Identifier(str) => str
+    _ => @util.die("Expected identifier")
+  }
+  rest = skip(rest, @lex.Identifier(name))
+
+  let mut var_type = @types.Type::Unit
+  if checkToken(rest, @lex.Colon) {
+    rest = skip(rest, @lex.Colon)
+    let (ty, new_rest) = type_annotation(rest)
+    var_type = ty
+    rest = new_rest
+  }
+
+  rest = skip(rest, @lex.Equ)
+  let (expr_syntax, new_rest) = expr(rest)
+  rest = new_rest
+  rest = skip(rest, @lex.Semicolon)
+  let (stmt_syntax, new_rest) = stmt(rest)
+  rest = new_rest
+  (@types.Syntax::Let((name, var_type), expr_syntax, stmt_syntax), rest)
+}
+
 
 // fn_decl_stmt: nontop_fn_decl ';' stmt
-// LetRec(Fundef, Syntax) // fn f() {} ; _
 fn fn_decl_stmt(
   rest : ArrayView[@lex.Token]
 ) -> (@types.Syntax, ArrayView[@lex.Token]) {
@@ -584,6 +704,7 @@ fn checkToken(
   }
 }
 
+// type (不包含COLON)
 fn type_annotation(
   rest : ArrayView[@lex.Token]
 ) -> (@types.Type, ArrayView[@lex.Token]) {
