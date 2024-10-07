@@ -56,6 +56,62 @@ pub enum Type {
   Ptr
 } derive(Show)
 
+// top_level: top_let_decl | toplevel_fn_decl
+fn top_level(
+  rest : ArrayView[@lex.Token]
+) -> (@types.Syntax, ArrayView[@lex.Token]) {
+  let mut rest = rest
+  match rest[0] {
+    @lex.Let => top_let_decl(rest)
+    @lex.Fn => toplevel_fn_decl(rest)
+    _ => @util.die("Unexpected token")
+  }
+}
+
+// top_let_decl:
+// 'let' IDENTIFIER ':' type '=' expr ';'
+fn top_let_decl(
+  rest : ArrayView[@lex.Token]
+) -> (@types.Syntax, ArrayView[@lex.Token]) {
+  let mut rest = skip(rest, @lex.Let)
+  let name = match rest[0] {
+    @lex.Identifier(str) => str
+    _ => @util.die("Expected identifier")
+  }
+  rest = skip(rest, @lex.Identifier(name))
+  rest = skip(rest, @lex.Colon)
+  let (ty, new_rest) = type_annotation(rest)
+  rest = new_rest
+  rest = skip(rest, @lex.Equ)
+  let (expr, new_rest) = expr(rest)
+  rest = new_rest
+  rest = skip(rest, @lex.Semicolon)
+  let (stmt_syntax, new_rest) = stmt(rest)
+  rest = new_rest
+  (@types.Syntax::Let((name, ty), expr, stmt_syntax), rest)
+}
+
+
+// toplevel_fn_decl: (main_fn_decl | top_fn_decl) ';'
+fn toplevel_fn_decl(
+  rest : ArrayView[@lex.Token]
+) -> (@types.Fundef, ArrayView[@lex.Token]) {
+  let mut new_rest = skip(rest, @lex.Fn)
+  let mut rest = rest
+  match new_rest[0] {
+    @lex.Identifier("main") | @lex.Identifier("init") => {
+      let (fundef, new_rest) = main_fn_decl(rest)
+      rest = skip(new_rest, @lex.Semicolon)
+      (fundef, rest)
+    }
+    _ =>  {
+      let (fundef, new_rest) = top_fn_decl(rest)
+      rest = skip(new_rest, @lex.Semicolon)
+      (fundef, rest)
+    }
+  }
+}
+
 // main_fn_decl: 'fn' ('main' | 'init') fn_body;
 fn main_fn_decl(
   rest : ArrayView[@lex.Token]
