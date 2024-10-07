@@ -61,6 +61,49 @@ pub enum Type {
 
 // top_level: top_let_decl | toplevel_fn_decl
 
+
+
+
+// x[y] = z
+// assign_stmt: get_expr '=' expr ';' stmt
+fn assign_stmt(
+  rest : ArrayView[@lex.Token]
+) -> (@types.Syntax, ArrayView[@lex.Token]) {
+  let (gexpr_syntax, new_rest) = get_expr(rest)
+  let mut rest = new_rest
+  rest = skip(rest, @lex.Equ)
+  let (expr_syntax, new_rest) = expr(rest)
+  rest = new_rest
+  rest = skip(rest, @lex.Semicolon)
+  let (stmt_syntan, new_rest) = stmt(rest)
+  rest = new_rest
+  (@types.Syntax::Put(gexpr_syntax, expr_syntax, stmt_syntan), rest)
+}
+
+// get_expr: get_or_apply_level_expr '[' expr ']'
+fn get_expr(
+  rest : ArrayView[@lex.Token]
+) -> (@types.Syntax, ArrayView[@lex.Token]) {
+  let (base_expr, new_rest) = get_or_apply_level_expr(rest)
+  let mut rest = new_rest
+  rest = skip(rest, @lex.Lbracket)
+  let (expr, new_rest) = expr(rest)
+  rest = new_rest
+  rest = skip(rest, @lex.Rbracket)
+  (@types.Syntax::Get(base_expr, expr), rest)
+}
+
+// expr_stmt: expr
+fn expr_stmt(
+  rest : ArrayView[@lex.Token]
+) -> (@types.Syntax, ArrayView[@lex.Token]) {
+  let (syntax, rest) = expr(rest)
+  match syntax {
+    @types.Syntax::Prim(_) => (syntax, rest)
+    _ => @util.die("Expected a primary expression") // 尝试进行错误处理
+  }
+}
+
 // Expressions, in order of precedence.
 // expr: // not associative
 // add_sub_level_expr '==' add_sub_level_expr
