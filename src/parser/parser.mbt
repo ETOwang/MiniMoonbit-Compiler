@@ -62,7 +62,117 @@ pub enum Type {
 // top_level: top_let_decl | toplevel_fn_decl
 
 
+// fn_body: '{' stmt '}'
+fn fn_body(
+  rest : ArrayView[@lex.Token]
+) -> (@types.Syntax, ArrayView[@lex.Token]) {
+  let mut rest = skip(rest, @lex.Lcurlybracket)
+  let (syn, new_rest) = stmt(rest)
+  rest = new_rest
+  rest = skip(rest, @lex.Rcurlybracket)
+  (syn, rest)
+}
 
+
+// nontop_fn_decl:
+// 'fn' IDENTIFIER '(' nontop_param_list? ')' (
+// '->' type
+// )? fn_body;
+fn nontop_fn_decl(
+  rest : ArrayView[@lex.Token]
+) -> (@types.Fundef, ArrayView[@lex.Token]) {
+  let mut rest = skip(rest, @lex.Fn)
+  let name = match rest[0] {
+    @lex.Identifier(str) => str
+    _ => @util.die("Expected identifier")
+  }
+  rest = skip(rest, @lex.Identifier(name))
+
+  rest = skip(rest, @lex.Lparen)
+
+  let mut args = []
+  if not(checkToken(rest, @lex.Rparen)) {
+    let (param_list, new_rest) = nontop_param_list(rest)
+    args = param_list
+    rest = new_rest
+  }
+
+  rest = skip(rest, @lex.Rparen)
+
+  let mut ret_ty = @types.Type::Unit
+  if checkToken(rest, @lex.Arrow) {
+    rest = skip(rest, @lex.Arrow)
+    let (ty, new_rest) = type_annotation(rest)
+    ret_ty = ty
+    rest = new_rest
+  }
+
+  let (body, new_rest) = fn_body(rest)
+  rest = new_rest
+
+  let fundef = @types.Fundef { // TOCHECK: 我不理解这里为什么报错，文档里就是这样构造结构体的
+    name: (name, ret_ty),
+    args: args,
+    body: body
+  }
+
+  (fundef, rest)
+}
+
+// nontop_param_list: nontop_param (',' nontop_param)*
+fn nontop_param_list(
+  rest : ArrayView[@lex.Token]
+) -> (Array[(String, @types.Type)], ArrayView[@lex.Token]) {
+  let mut rest = rest
+  let mut param_ls = []
+
+  let (param, new_rest) = nontop_param(rest)
+  param_ls.push(param)
+  rest = new_rest
+  while checkToken(rest, @lex.Comma) {
+    rest = skip(rest, @lex.Comma)
+    let (param, new_rest) = nontop_param(rest)
+    param_ls.push(param)
+    rest = new_rest
+  }
+
+  (param_ls, rest)
+}
+
+// nontop_param: IDENTIFIER type_annotation?
+fn nontop_param(
+  rest : ArrayView[@lex.Token]
+) -> ((String, @types.Type), ArrayView[@lex.Token]) {
+  let mut rest = rest
+  let name = match rest[0] {
+    @lex.Identifier(str) => str
+    _ => @util.die("Expected identifier")
+  }
+  rest = skip(rest, @lex.Identifier(name))
+
+  let mut param_type = @types.Type::Unit
+  if checkToken(rest, @lex.Colon) {
+    rest = skip(rest, @lex.Colon)
+    let (ty, new_rest) = type_annotation(rest)
+    rest = new_rest
+    param_type = ty
+  }
+  ((name, param_type), rest)
+}
+
+
+// fn_decl_stmt: nontop_fn_decl ';' stmt
+// LetRec(Fundef, Syntax) // fn f() {} ; _
+fn fn_decl_stmt(
+  rest : ArrayView[@lex.Token]
+) -> (@types.Syntax, ArrayView[@lex.Token]) {
+  let (fundef, new_rest) = nontop_fn_decl(rest)
+  let mut rest = new_rest
+  rest = skip(rest, @lex.Semicolon)
+  let (stmt_syntax, new_rest) = stmt(rest)
+  rest = new_rest
+  (@types.Syntax::LetRec(fundef, stmt_syntax), rest)
+}
 
 // x[y] = z
 // assign_stmt: get_expr '=' expr ';' stmt
@@ -472,4 +582,86 @@ fn checkToken(
     token => true
     _ => false
   }
+}
+
+fn type_annotation(
+  rest : ArrayView[@lex.Token]
+) -> (@types.Type, ArrayView[@lex.Token]) {
+  let mut rest = rest
+  let ty = match rest[0] {
+    @lex.Unit => { // Unit
+      rest = skip(rest, @lex.Unit)
+      @types.Type::Unit
+    }
+    @lex.Bool => { // Bool
+      rest = skip(rest, @lex.Bool)
+      @types.Type::Bool
+    }
+    @lex.Int => { // Int
+      rest = skip(rest, @lex.Int)
+      @types.Type::Int
+    }
+    @lex.Double => { // Double
+      rest = skip(rest, @lex.Double)
+      @types.Type::Double
+    }
+    @lex.Fn => { // Fun(Arrar[Type], Type)
+      rest = skip(rest, @lex.Fn)
+      rest = skip(rest, @lex.Lparen)
+      let mut arg_types = []
+      if not(checkToken(rest, @lex.Rparen)) {
+        let (arg_type, new_rest) = type_annotation(rest)
+        arg_types.push(arg_type)
+        rest = new_rest
+        while checkToken(rest, @lex.Comma) {
+          rest = skip(rest, @lex.Comma)
+          let (arg_type, new_rest) = type_annotation(rest)
+          arg_types.push(arg_type)
+          rest = new_rest
+        }
+      }
+      rest = skip(rest, @lex.Rparen)
+
+      let mut ret_type = @types.Type::Unit
+      if checkToken(rest, @lex.Arrow) {
+        rest = skip(rest, @lex.Arrow)
+        let (new_ret_type, new_rest) = type_annotation(rest)
+        rest = new_rest
+        ret_type = new_ret_type
+      }
+      @types.Type::Fun(arg_types, ret_type)
+    }
+    @lex.Lparen => { // Tuple(Array[Type]) //TOCHECK
+      rest = skip(rest, @lex.Lparen)
+      let mut elem_types = []
+      let (elem_type, new_rest) = type_annotation(rest)
+      elem_types.push(elem_type)
+      rest = new_rest
+      while checkToken(rest, @lex.Comma) {
+        rest = skip(rest, @lex.Comma)
+        let (elem_type, new_rest) = type_annotation(rest)
+        elem_types.push(elem_type)
+        rest = new_rest
+      }
+      rest = skip(rest, @lex.Rparen)
+      @types.Type::Tuple(elem_types)
+    }
+    @lex.Array => { // Array(Type) // TOCHECK
+      rest = skip(rest, @lex.Array)
+      rest = skip(rest, @lex.Lbracket)
+      let (elem_type, new_rest) = type_annotation(rest)
+      rest = new_rest
+      rest = skip(rest, @lex.Rbracket)
+      @types.Type::Array(elem_type)
+    }
+    @lex.Identifier(str) => { // Var(Ref[Type?]) // TOCHECK
+      rest = skip(rest, @lex.Identifier(str))
+      let (var_type, new_rest) = type_annotation(rest)
+      rest = new_rest
+      @types.Type::Var(Ref::new(Some(var_type)))
+    }
+    // Ptr
+    _ => @util.die("Unexpected type token")
+  }
+  (ty, rest)
 }
