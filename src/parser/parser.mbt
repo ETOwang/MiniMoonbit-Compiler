@@ -1,9 +1,3 @@
-// fn parse(source_code: String) -> @types.Syntax {
-//   let context:@lex.Context = {str: source_code, offset: 0, array: []}
-//   @lex.lex(context)
-//   prog(context)
-// }
-
 // pub enum Syntax {
 //   Unit
 //   Bool(Bool) // true false
@@ -52,14 +46,44 @@
 //   Ptr
 // } derive(Show)
 
+pub fn parse(source_code: String) -> @types.Syntax {
+  let context:@lex.Context = {str: source_code, offset: 0, array: []}
+  @lex.lex(context)
+  prog(context)
+}
+
+// prog: top_level* EOF
+fn prog(
+  context: @lex.Context
+) -> (@types.Syntax) {
+  let (ast, rest) = top_level(context.array[:])
+  if not(checkToken(rest, @lex.EOF)) {
+    @util.die("Expect ending with EOF!")
+  }
+  ast
+}
+
 // top_level: top_let_decl | toplevel_fn_decl
 fn top_level(
   rest : ArrayView[@lex.Token]
 ) -> (@types.Syntax, ArrayView[@lex.Token]) {
   let mut rest = rest
   match rest[0] {
-    @lex.Let => top_let_decl(rest)
-    @lex.Fn => toplevel_fn_decl(rest)
+    @lex.EOF => (@types.Syntax::Unit, rest) // 完成所有解析，直接返回(Unit, EOF)
+    @lex.Let => { // 解析 Let
+      let (letdef, new_rest) = top_let_decl(rest)
+      rest = new_rest
+      let (nextsyn, new_rest) = top_level(rest)
+      rest = new_rest
+      (@types.Syntax::Let(letdef.0, letdef.1, nextsyn), rest)
+    }
+    @lex.Fn => { // 解析 fn
+      let (fundef, new_rest) = toplevel_fn_decl(rest)
+      rest = new_rest
+      let (nextsyn, new_rest) = top_level(rest)
+      rest = new_rest
+      (@types.Syntax::LetRec(fundef, nextsyn), rest)
+    }
     _ => @util.die("Unexpected token")
   }
 }
@@ -68,7 +92,7 @@ fn top_level(
 // 'let' IDENTIFIER ':' type '=' expr ';'
 fn top_let_decl(
   rest : ArrayView[@lex.Token]
-) -> (@types.Syntax, ArrayView[@lex.Token]) {
+) -> (((String, @types.Type), @types.Syntax), ArrayView[@lex.Token]) {
   let mut rest = skip(rest, @lex.Let)
   let name = match rest[0] {
     @lex.Identifier(str) => str
@@ -82,27 +106,25 @@ fn top_let_decl(
   let (expr, new_rest) = expr(rest)
   rest = new_rest
   rest = skip(rest, @lex.Semicolon)
-  let (stmt_syntax, new_rest) = stmt(rest)
-  rest = new_rest
-  (@types.Syntax::Let((name, ty), expr, stmt_syntax), rest)
+  (((name, ty), expr), rest)
 }
 
 // toplevel_fn_decl: (main_fn_decl | top_fn_decl) ';'
 fn toplevel_fn_decl(
   rest : ArrayView[@lex.Token]
-) -> (@types.Syntax, ArrayView[@lex.Token]) {
-  let mut new_rest = skip(rest, @lex.Fn)
+) -> (@types.Fundef, ArrayView[@lex.Token]) {
+  let new_rest = skip(rest, @lex.Fn)
   let mut rest = rest // rest部分没有跳过'Fn'
   match new_rest[0] { // 直接根据函数名判断调用 main_fn_decl or top_fn_decl
     @lex.Identifier("main") | @lex.Identifier("init") => { // name = main | init
-      let (syn, new_rest) = main_fn_decl(rest)
+      let (fundef, new_rest) = main_fn_decl(rest)
       rest = skip(new_rest, @lex.Semicolon)
-      (syn, rest)
+      (fundef, rest)
     }
     _ => {
-      let (syn, new_rest) = top_fn_decl(rest)
+      let (fundef, new_rest) = top_fn_decl(rest)
       rest = skip(new_rest, @lex.Semicolon)
-      (syn, rest)
+      (fundef, rest)
     }
   }
 }
@@ -110,7 +132,7 @@ fn toplevel_fn_decl(
 // main_fn_decl: 'fn' ('main' | 'init') fn_body;
 fn main_fn_decl(
   rest : ArrayView[@lex.Token]
-) -> (@types.Syntax, ArrayView[@lex.Token]) {
+) -> (@types.Fundef, ArrayView[@lex.Token]) {
   let mut rest = skip(rest, @lex.Fn)
   let name = match rest[0] {
     @lex.Identifier("main") => "main"
@@ -119,21 +141,24 @@ fn main_fn_decl(
   }
   rest = skip(rest, @lex.Identifier(name))
   let (body, rest) = fn_body(rest)
+  let params_type: Array[@types.Type] = []
   let params = []
   let return_type = @types.Type::Unit
+  let functype = @types.Type::Fun(params_type, return_type)
   let fundef: @types.Fundef = { 
-    name: (name, return_type), // TODO
+    name: (name, functype), 
     args: params,
     body: body,
   }
-  (@types.Syntax::LetRec(fundef, body), rest)
+  // 返回的是Fundef
+  (fundef, rest)
 }
 
 // top_fn_decl:
 // 'fn' IDENTIFIER '(' param_list? ')' '->' type fn_body; stmt
 fn top_fn_decl(
   rest : ArrayView[@lex.Token]
-) -> (@types.Syntax, ArrayView[@lex.Token]) {
+) -> (@types.Fundef, ArrayView[@lex.Token]) {
   let mut rest = skip(rest, @lex.Fn)
   let name = match rest[0] { // ident
     @lex.Identifier(str) => str
@@ -153,12 +178,17 @@ fn top_fn_decl(
   rest = new_rest
   let (body, new_rest) = fn_body(rest) // 函数体
   rest = new_rest
+  // 从params(String, type)中分离出type
+  let paramtype = []
+  for param in params {
+    paramtype.push(param.1)
+  }
   let fundef: @types.Fundef = { 
-    name: (name, @types.Type::Fun(params, return_type)), // TODO
+    name: (name, @types.Type::Fun(paramtype, return_type)), 
     args: params,
     body: body,
   }
-  (@types.Syntax::LetRec(fundef, body), rest)
+  (fundef, rest)
 }
 
 // param_list: param (',' param)*
@@ -166,15 +196,15 @@ fn param_list(
   rest : ArrayView[@lex.Token]
 ) -> (Array[(String, @types.Type)], ArrayView[@lex.Token]) {
   let mut rest = rest
-  let mut params = []
-  let (param, new_rest): ((String, @types.Type), ArrayView[@lex.Token]) = param(rest) // param
-  params.push(param)
+  let params = []
+  let (arg, new_rest): ((String, @types.Type), ArrayView[@lex.Token]) = param(rest) // param
+  params.push(arg)
   rest = new_rest
   while checkToken(rest, @lex.Comma) {
     rest = skip(rest, @lex.Comma)
-    let (param, new_rest): ((String, @types.Type), ArrayView[@lex.Token]) = param(rest) // (',' param)* // TOCHECK
+    let (arg, new_rest): ((String, @types.Type), ArrayView[@lex.Token]) = param(rest) // (',' param)* // TOCHECK
     rest = new_rest
-    params.push(param)
+    params.push(arg)
   }
   (params, rest)
 }
@@ -225,9 +255,9 @@ fn nontop_fn_decl(
     args = param_list
     rest = new_rest
   }
-  rest = skip(rest, @lex.Rparen)
-  let mut ret_ty = @types.Type::Unit
-  if checkToken(rest, @lex.Arrow) {
+  rest = skip(rest, @lex.Rparen) 
+  let mut ret_ty = @types.Type::Unit // 没写返回值就认为是Unit
+  if checkToken(rest, @lex.Arrow) { // 解析函数返回值
     rest = skip(rest, @lex.Arrow)
     let (ty, new_rest) = type_annotation(rest)
     ret_ty = ty
@@ -235,8 +265,13 @@ fn nontop_fn_decl(
   }
   let (body, new_rest) = fn_body(rest)
   rest = new_rest
+  // 从args(String, type)中分离出每一个arg的type
+  let argstype = [] 
+  for arg in args {
+    argstype.push(arg.1)
+  }
   let fundef: @types.Fundef = { 
-    name: (name, ret_ty), // TODO
+    name: (name, @types.Fun(argstype, ret_ty)), 
     args: args,
     body: body,
   }
@@ -248,7 +283,7 @@ fn nontop_param_list(
   rest : ArrayView[@lex.Token]
 ) -> (Array[(String, @types.Type)], ArrayView[@lex.Token]) {
   let mut rest = rest
-  let mut param_ls = []
+  let param_ls = []
   let (param, new_rest) = nontop_param(rest)
   param_ls.push(param) // 一定存在一个 nontop_param
   rest = new_rest
@@ -271,7 +306,7 @@ fn nontop_param(
     _ => @util.die("Expect identifier in nontop_param")
   }
   rest = skip(rest, @lex.Identifier(name))
-  let mut param_type = @types.Type::Unit
+  let mut param_type = @types.Type::Var({val:None})
   if checkToken(rest, @lex.Colon) { // 有 ':' 存在类型说明
     rest = skip(rest, @lex.Colon)
     let (ty, new_rest) = type_annotation(rest)
@@ -290,7 +325,7 @@ fn nontop_param(
 fn stmt(
   rest : ArrayView[@lex.Token]
 ) -> (@types.Syntax, ArrayView[@lex.Token]) {
-  let mut rest = rest
+  let rest = rest
   match rest[0] {
     @lex.Let =>
       match rest[1] {
@@ -299,7 +334,7 @@ fn stmt(
       }
     @lex.Fn => fn_decl_stmt(rest)
     _ => {
-      let mut tmp_rest = get_expr(rest).1
+      let tmp_rest = get_expr(rest).1
       if checkToken(tmp_rest, @lex.Equ) {
         assign_stmt(rest)
       } else {
@@ -319,14 +354,14 @@ fn let_tuple_stmt(
   rest = skip(rest, @lex.Lparen)
 
   // 解析标识符列表
-  let mut identifiers = []
+  let identifiers = []
   let name = match rest[0] {
     @lex.Identifier(str) => str
     _ => @util.die("Expected identifier")
   }
-  identifiers.push(name)
+  identifiers.push(name) // 解析第一个标识符
   rest = skip(rest, @lex.Identifier(name))
-  while checkToken(rest, @lex.Comma) {
+  while checkToken(rest, @lex.Comma) { // 解析后续标识符
     rest = skip(rest, @lex.Comma)
     let name = match rest[0] {
       @lex.Identifier(str) => str
@@ -337,7 +372,7 @@ fn let_tuple_stmt(
   }
   rest = skip(rest, @lex.Rparen)
   let mut ty_arr = []
-  if checkToken(rest, @lex.Colon) {
+  if checkToken(rest, @lex.Colon) { // 解析tuple的类型
     rest = skip(rest, @lex.Colon)
     let (ty, new_rest) = type_annotation(rest)
     rest = new_rest
@@ -345,7 +380,8 @@ fn let_tuple_stmt(
       @types.Type::Tuple(arr) => ty_arr = arr
     }
   }
-  let ident_arr = []
+  // 需要返回（name，type）的形式，对identifiers和ty_arr重新组合
+  let ident_arr = [] 
   let mut i = 0
   while i < identifiers.length() {
     ident_arr.push((identifiers[i], ty_arr[i]))
@@ -373,7 +409,8 @@ fn let_stmt(
     _ => @util.die("Expected identifier")
   }
   rest = skip(rest, @lex.Identifier(name))
-  let mut var_type = @types.Type::Unit
+  // 当某个变量或者函数没有标注类型时，其类型可以在 AST 中标为 Var({val: None})
+  let mut var_type = @types.Type::Var({val: None}) 
   if checkToken(rest, @lex.Colon) {
     rest = skip(rest, @lex.Colon)
     let (ty, new_rest) = type_annotation(rest)
@@ -531,7 +568,6 @@ fn mul_div_level_expr(
 fn if_level_expr(
   rest : ArrayView[@lex.Token]
 ) -> (@types.Syntax, ArrayView[@lex.Token]) {
-  let mut rest = rest
   match rest[0] {
     @lex.If => if_expr(rest)
     _ => get_or_apply_level_expr(rest)
@@ -581,7 +617,7 @@ fn get_or_apply_level_expr(
       }
       @lex.Lparen => { // get_or_apply_level_expr '(' (expr (',' expr)*)? ')'
         rest = skip(rest, @lex.Lparen) // '('
-        let mut args = []
+        let args = []
         if not(checkToken(rest, @lex.Rparen)) { // 如果括号中存在参数
           let (exp, new_rest) = expr(rest) // 解析第一个参数
           args.push(exp)
@@ -617,7 +653,6 @@ fn get_or_apply_level_expr(
 fn value_expr(
   rest : ArrayView[@lex.Token]
 ) -> (@types.Syntax, ArrayView[@lex.Token]) {
-  let mut rest = rest
   match rest[0] { //对应上方规则，判断是哪一种value_expr
     @lex.Lparen =>
       match rest[1] {
@@ -657,7 +692,7 @@ fn tuple_expr(
   rest = skip(rest, @lex.Lparen) // '('
   let (syn, new_rest) = expr(rest) // expr
   rest = new_rest // 让rest为可修改参数
-  let mut arr = [] // (',' expr)+
+  let arr = [] // (',' expr)+
   arr.push(syn)
   while checkToken(rest, @lex.Comma) {
     rest = skip(rest, @lex.Comma)
@@ -735,7 +770,6 @@ fn floating_point_expr(
 fn int_expr(
   rest : ArrayView[@lex.Token]
 ) -> (@types.Syntax, ArrayView[@lex.Token]) {
-  let mut rest = rest
   let value = match rest[0] { // Number
     @lex.Number(n) => n
     _ => @util.die("Expect num in int_expr")
@@ -767,9 +801,9 @@ fn array_make_expr(
   rest = skip(rest, @lex.Make) // 'make'
   rest = skip(rest, @lex.Lparen) // '('
   let (syn1, rest) = expr(rest) // expr
-  let mut rest = skip(rest, @lex.Comma) // ','
+  let rest = skip(rest, @lex.Comma) // ','
   let (syn2, rest) = expr(rest) // expr
-  let mut rest = skip(rest, @lex.Rparen) //')'
+  let rest = skip(rest, @lex.Rparen) //')'
   (@types.Syntax::Array(syn1, syn2), rest)
 }
 
@@ -777,7 +811,6 @@ fn array_make_expr(
 fn identifier_expr(
   rest : ArrayView[@lex.Token]
 ) -> (@types.Syntax, ArrayView[@lex.Token]) {
-  let mut rest = rest
   let str = match rest[0] { // Ident
     @lex.Identifier(s) => s
     _ => @util.die("Expect identifier in identifier_expr")
@@ -825,7 +858,7 @@ fn type_annotation(
     }
     @lex.Lparen => { // Fun(Arrar[Type], Type) | Tuple(Array[Type])
       rest = skip(rest, @lex.Lparen)
-      let mut arg_types = [] // (_, _, _)
+      let arg_types = [] // (_, _, _)
       if not(checkToken(rest, @lex.Rparen)) {
         let (arg_type, new_rest) = type_annotation(rest)
         arg_types.push(arg_type)
@@ -867,4 +900,14 @@ fn type_annotation(
     _ => @util.die("Unexpected type token in type_annotation, with rest \{rest}")
   }
   (ty, rest)
+}
+
+test {
+  let input = "1 + 2 - 3"
+  let tokens = []
+  let context: @lex.Context = { str: input, offset: 0, array: tokens }
+  @lex.lex(context)
+  inspect!(tokens, content="[Number(1), Add, Number(2), Sub, Number(3), EOF]")
+  let (expr) = prog(context)
+  inspect!(expr, content="Minus(Plus(Number(1), Number(2)), Number(3))")
 }

@@ -35,6 +35,7 @@ pub enum Token {
   Comma // ','
   Ws // [ \t\r\n]+ -> skip
   Comment // '//' ~[\r\n]* -> skip
+  EOF // end of file
 } derive(Show)
 
 pub struct Context {
@@ -193,6 +194,9 @@ pub fn lex(context : Context) -> Unit {
 
     //错误处理
   }
+
+  context.array.push(EOF) // 标志解析结束
+
 }
 
 // 匹配第一个数字之后的数字
