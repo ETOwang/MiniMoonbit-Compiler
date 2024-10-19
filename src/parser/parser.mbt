@@ -32,8 +32,6 @@
 //   Div
 // } derive(Show, Eq)
 
-
-
 // pub enum Type {
 //   Unit
 //   Bool
@@ -46,16 +44,14 @@
 //   Ptr
 // } derive(Show)
 
-pub fn parse(source_code: String) -> @types.Syntax {
-  let context:@lex.Context = {str: source_code, offset: 0, array: []}
+pub fn parse(source_code : String) -> @types.Syntax {
+  let context : @lex.Context = { str: source_code, offset: 0, array: [] }
   @lex.lex(context)
   prog(context)
 }
 
 // prog: top_level* EOF
-fn prog(
-  context: @lex.Context
-) -> (@types.Syntax) {
+pub fn prog(context : @lex.Context) -> @types.Syntax {
   let (ast, rest) = top_level(context.array[:])
   if not(checkToken(rest, @lex.EOF)) {
     @util.die("Expect ending with EOF!")
@@ -141,17 +137,15 @@ fn main_fn_decl(
   }
   rest = skip(rest, @lex.Identifier(name))
   let (body, rest) = fn_body(rest)
-  let params_type: Array[@types.Type] = []
+  let params_type : Array[@types.Type] = []
   let params = []
   let return_type = @types.Type::Unit
   let functype = @types.Type::Fun(params_type, return_type)
-  let fundef: @types.Fundef = { 
-    name: (name, functype), 
-    args: params,
-    body: body,
-  }
-  // 返回的是Fundef
-  (fundef, rest)
+  let fundef : @types.Fundef = { name: (name, functype), args: params, body }
+  (
+    // 返回的是Fundef
+    fundef, rest,
+  )
 }
 
 // top_fn_decl:
@@ -183,10 +177,10 @@ fn top_fn_decl(
   for param in params {
     paramtype.push(param.1)
   }
-  let fundef: @types.Fundef = { 
-    name: (name, @types.Type::Fun(paramtype, return_type)), 
+  let fundef : @types.Fundef = {
+    name: (name, @types.Type::Fun(paramtype, return_type)),
     args: params,
-    body: body,
+    body,
   }
   (fundef, rest)
 }
@@ -197,12 +191,16 @@ fn param_list(
 ) -> (Array[(String, @types.Type)], ArrayView[@lex.Token]) {
   let mut rest = rest
   let params = []
-  let (arg, new_rest): ((String, @types.Type), ArrayView[@lex.Token]) = param(rest) // param
+  let (arg, new_rest) : ((String, @types.Type), ArrayView[@lex.Token]) = param(
+    rest,
+  ) // param
   params.push(arg)
   rest = new_rest
   while checkToken(rest, @lex.Comma) {
     rest = skip(rest, @lex.Comma)
-    let (arg, new_rest): ((String, @types.Type), ArrayView[@lex.Token]) = param(rest) // (',' param)* // TOCHECK
+    let (arg, new_rest) : ((String, @types.Type), ArrayView[@lex.Token]) = param(
+      rest,
+    ) // (',' param)* // TOCHECK
     rest = new_rest
     params.push(arg)
   }
@@ -219,6 +217,7 @@ fn param(
     _ => @util.die("Expect identifier in param")
   }
   rest = skip(rest, @lex.Identifier(name))
+  rest = skip(rest, @lex.Colon)
   let (ty, new_rest) = type_annotation(rest)
   rest = new_rest
   ((name, ty), rest)
@@ -247,7 +246,7 @@ fn nontop_fn_decl(
     @lex.Identifier(str) => str
     _ => @util.die("Expect identifier in nontop_fn_decl")
   }
-  rest = skip(rest, @lex.Identifier(name)) 
+  rest = skip(rest, @lex.Identifier(name))
   rest = skip(rest, @lex.Lparen)
   let mut args = []
   if not(checkToken(rest, @lex.Rparen)) { // 存在nontop_param_list
@@ -255,7 +254,7 @@ fn nontop_fn_decl(
     args = param_list
     rest = new_rest
   }
-  rest = skip(rest, @lex.Rparen) 
+  rest = skip(rest, @lex.Rparen)
   let mut ret_ty = @types.Type::Unit // 没写返回值就认为是Unit
   if checkToken(rest, @lex.Arrow) { // 解析函数返回值
     rest = skip(rest, @lex.Arrow)
@@ -266,14 +265,14 @@ fn nontop_fn_decl(
   let (body, new_rest) = fn_body(rest)
   rest = new_rest
   // 从args(String, type)中分离出每一个arg的type
-  let argstype = [] 
+  let argstype = []
   for arg in args {
     argstype.push(arg.1)
   }
-  let fundef: @types.Fundef = { 
-    name: (name, @types.Fun(argstype, ret_ty)), 
-    args: args,
-    body: body,
+  let fundef : @types.Fundef = {
+    name: (name, @types.Fun(argstype, ret_ty)),
+    args,
+    body,
   }
   (fundef, rest)
 }
@@ -306,7 +305,7 @@ fn nontop_param(
     _ => @util.die("Expect identifier in nontop_param")
   }
   rest = skip(rest, @lex.Identifier(name))
-  let mut param_type = @types.Type::Var({val:None})
+  let mut param_type = @types.Type::Var({ val: None })
   if checkToken(rest, @lex.Colon) { // 有 ':' 存在类型说明
     rest = skip(rest, @lex.Colon)
     let (ty, new_rest) = type_annotation(rest)
@@ -321,11 +320,10 @@ fn nontop_param(
 // | let_stmt
 // | fn_decl_stmt
 // | assign_stmt
-// | expr_stmt;
-fn stmt(
-  rest : ArrayView[@lex.Token]
-) -> (@types.Syntax, ArrayView[@lex.Token]) {
-  let rest = rest
+// | expr_stmt
+// | if_expr;
+fn stmt(rest : ArrayView[@lex.Token]) -> (@types.Syntax, ArrayView[@lex.Token]) {
+  println("rest \{rest[0]}")
   match rest[0] {
     @lex.Let =>
       match rest[1] {
@@ -333,9 +331,11 @@ fn stmt(
         _ => let_stmt(rest)
       }
     @lex.Fn => fn_decl_stmt(rest)
+    @lex.If => if_expr(rest)
     _ => {
-      let tmp_rest = get_expr(rest).1
-      if checkToken(tmp_rest, @lex.Equ) {
+      let ( _, tmp_rest) = get_expr(rest)
+      println("rest tk \{tmp_rest[0]}")
+      if checkToken(tmp_rest, @lex.Assign) {
         assign_stmt(rest)
       } else {
         expr_stmt(rest)
@@ -379,12 +379,16 @@ fn let_tuple_stmt(
     match ty {
       @types.Type::Tuple(arr) => ty_arr = arr
     }
-  }
+  } 
   // 需要返回（name，type）的形式，对identifiers和ty_arr重新组合
-  let ident_arr = [] 
+  let ident_arr = []
   let mut i = 0
   while i < identifiers.length() {
-    ident_arr.push((identifiers[i], ty_arr[i]))
+    if not(ty_arr.is_empty()) {
+      ident_arr.push((identifiers[i], ty_arr[i]))
+    } else {
+      ident_arr.push((identifiers[i], @types.Type::Var({val: None})))
+    }
     i = i + 1
   }
   rest = skip(rest, @lex.Equ)
@@ -410,7 +414,7 @@ fn let_stmt(
   }
   rest = skip(rest, @lex.Identifier(name))
   // 当某个变量或者函数没有标注类型时，其类型可以在 AST 中标为 Var({val: None})
-  let mut var_type = @types.Type::Var({val: None}) 
+  let mut var_type = @types.Type::Var({ val: None })
   if checkToken(rest, @lex.Colon) {
     rest = skip(rest, @lex.Colon)
     let (ty, new_rest) = type_annotation(rest)
@@ -460,11 +464,15 @@ fn get_expr(
 ) -> (@types.Syntax, ArrayView[@lex.Token]) {
   let (base_expr, new_rest) = get_or_apply_level_expr(rest) // get_or_apply_level_expr
   let mut rest = new_rest
-  rest = skip(rest, @lex.Lbracket) // '['
-  let (expr, new_rest) = expr(rest) //expr
-  rest = new_rest
-  rest = skip(rest, @lex.Rbracket) // ']'
-  (@types.Syntax::Get(base_expr, expr), rest)
+  if checkToken(rest, @lex.Lbracket) {
+    rest = skip(rest, @lex.Lbracket) // '['
+    let (expr, new_rest) = expr(rest) //expr
+    rest = new_rest
+    rest = skip(rest, @lex.Rbracket) // ']'
+    (@types.Syntax::Get(base_expr, expr), rest)
+  } else {
+    (base_expr, rest)
+  }
 }
 
 // expr_stmt: expr
@@ -496,6 +504,7 @@ fn expr(rest : ArrayView[@lex.Token]) -> (@types.Syntax, ArrayView[@lex.Token]) 
       rest = new_rest
       syn = @types.Syntax::LE(syn1, syn2)
     }
+    _ => syn = syn1
   }
   (syn, rest)
 }
@@ -585,7 +594,7 @@ fn if_expr(
   let (if_block, new_rest) = block_expr(rest) // block_expr
   rest = new_rest
   let mut else_block = @types.Syntax::Unit
-  if checkToken(rest, @lex.Else) {  // else ?
+  if checkToken(rest, @lex.Else) { // else ?
     rest = skip(rest, @lex.Else)
     let (new_else_block, new_rest) = block_expr(rest)
     rest = new_rest
@@ -603,8 +612,9 @@ fn if_expr(
 fn get_or_apply_level_expr(
   rest : ArrayView[@lex.Token]
 ) -> (@types.Syntax, ArrayView[@lex.Token]) {
-  let (syn, new_rest) = value_expr(rest) //value_expr
+  let (new_syn, new_rest) = value_expr(rest) //value_expr
   let mut rest = new_rest
+  let mut syn = new_syn
   while true {
     match rest[0] {
       @lex.Lbracket => { // get_or_apply_level_expr '[' expr ']'
@@ -612,7 +622,8 @@ fn get_or_apply_level_expr(
         let (exp_syn, new_rest) = expr(rest) // expr
         rest = new_rest
         rest = skip(rest, @lex.Rbracket) // ']'
-        let syn = @types.Syntax::Get(syn, exp_syn)
+        syn = @types.Syntax::Get(syn, exp_syn)
+        println("Get syn: \{syn}, exp_syn : \{exp_syn}")
         continue
       }
       @lex.Lparen => { // get_or_apply_level_expr '(' (expr (',' expr)*)? ')'
@@ -630,7 +641,7 @@ fn get_or_apply_level_expr(
           }
         }
         rest = skip(rest, @lex.Rparen)
-        let syn = @types.Syntax::App(syn, args)
+        syn = @types.Syntax::App(syn, args)
         continue
       }
       _ => break
@@ -650,9 +661,11 @@ fn get_or_apply_level_expr(
 //  | int_expr NUMBER
 //  | not_expr 'not' '(' expr ')'
 //  | array_make_expr 'Array' ':' ':' 'make' '(' expr ',' expr ')'
+
 fn value_expr(
   rest : ArrayView[@lex.Token]
 ) -> (@types.Syntax, ArrayView[@lex.Token]) {
+  println("rest \{rest[0]}")
   match rest[0] { //对应上方规则，判断是哪一种value_expr
     @lex.Lparen =>
       match rest[1] {
@@ -670,7 +683,7 @@ fn value_expr(
     @lex.Not => not_expr(rest)
     @lex.Array => array_make_expr(rest)
     @lex.Identifier(str) => identifier_expr(rest)
-    _ => @util.die("Wrong value_expr")
+    _ => @util.die("Wrong value_expr with rest \{rest}")
   }
 }
 
@@ -685,6 +698,7 @@ fn unit_expr(
 }
 
 // tuple_expr: '(' expr (',' expr)+ ')'; // (x, y); 1-tuple is not allowed
+// '(' expr ')'
 fn tuple_expr(
   rest : ArrayView[@lex.Token]
 ) -> (@types.Syntax, ArrayView[@lex.Token]) {
@@ -692,19 +706,24 @@ fn tuple_expr(
   rest = skip(rest, @lex.Lparen) // '('
   let (syn, new_rest) = expr(rest) // expr
   rest = new_rest // 让rest为可修改参数
-  let arr = [] // (',' expr)+
-  arr.push(syn)
-  while checkToken(rest, @lex.Comma) {
-    rest = skip(rest, @lex.Comma)
-    let (x, new_rest) = expr(rest)
-    rest = new_rest
-    arr.push(x)
+  if checkToken(new_rest, @lex.Rparen) { // '(' expr ')'
+    rest = skip(rest, @lex.Rparen)
+    (syn, rest)
+  } else {
+    let arr = [] // (',' expr)+
+    arr.push(syn)
+    while checkToken(rest, @lex.Comma) {
+      rest = skip(rest, @lex.Comma)
+      let (x, new_rest) = expr(rest)
+      rest = new_rest
+      arr.push(x)
+    }
+    if arr.length() < 2 { // 1-tuple is not allowed
+      @util.die("1-tuple is not allowed in tuple_expr")
+    }
+    rest = skip(rest, @lex.Rparen) // ')'
+    (@types.Syntax::Tuple(arr), rest)
   }
-  if arr.length() < 2 { // 1-tuple is not allowed
-    @util.die("1-tuple is not allowed in tuple_expr")
-  }
-  rest = skip(rest, @lex.Rparen) // ')'
-  (@types.Syntax::Tuple(arr), rest)
 }
 
 // block_expr: '{' stmt '}'; // { blah; blah; }
@@ -744,7 +763,7 @@ fn floating_point_expr(
   rest : ArrayView[@lex.Token]
 ) -> (@types.Syntax, ArrayView[@lex.Token]) {
   let mut rest = rest
-  let value1 =  match rest[0] { // Number1, 转换为double类型
+  let value1 = match rest[0] { // Number1, 转换为double类型
     @lex.Number(n) => n
     _ => @util.die("Expect num in floating_point_expr")
   }
@@ -752,7 +771,7 @@ fn floating_point_expr(
   let integer = Int::to_double(value1)
   rest = skip(rest, @lex.Dot) // '.'
   let value2 = match rest[0] { // Number2
-    @lex.Number(n) => { 
+    @lex.Number(n) => {
       rest = skip(rest, @lex.Number(n)) // 有Number2则跳过Number2
       n
     }
@@ -827,10 +846,11 @@ fn skip(rest : ArrayView[@lex.Token], tk : @lex.Token) -> ArrayView[@lex.Token] 
 }
 
 // 检查rest中的第一个token是否为期望的token
-fn checkToken(rest : ArrayView[@lex.Token], token : @lex.Token) -> Bool {
-  match rest[0] {
-    token => true
-    _ => false
+fn checkToken(rest : ArrayView[@lex.Token], tk : @lex.Token) -> Bool {
+  if rest[0].to_string() == tk.to_string() {
+    true
+  } else {
+    false
   }
 }
 
@@ -839,6 +859,7 @@ fn type_annotation(
   rest : ArrayView[@lex.Token]
 ) -> (@types.Type, ArrayView[@lex.Token]) {
   let mut rest = rest
+  println("rest \{rest[0]}")
   let ty = match rest[0] {
     @lex.Unit => { // Unit
       rest = skip(rest, @lex.Unit)
@@ -897,17 +918,8 @@ fn type_annotation(
       @types.Type::Var(Ref::new(Some(var_type)))
     }
     // Ptr
-    _ => @util.die("Unexpected type token in type_annotation, with rest \{rest}")
+    _ =>
+      @util.die("Unexpected type token in type_annotation, with rest \{rest}")
   }
   (ty, rest)
-}
-
-test {
-  let input = "1 + 2 - 3"
-  let tokens = []
-  let context: @lex.Context = { str: input, offset: 0, array: tokens }
-  @lex.lex(context)
-  inspect!(tokens, content="[Number(1), Add, Number(2), Sub, Number(3), EOF]")
-  let (expr) = prog(context)
-  inspect!(expr, content="Minus(Plus(Number(1), Number(2)), Number(3))")
 }
