@@ -323,7 +323,6 @@ fn nontop_param(
 // | expr_stmt
 // | if_expr;
 fn stmt(rest : ArrayView[@lex.Token]) -> (@types.Syntax, ArrayView[@lex.Token]) {
-  println("rest \{rest[0]}")
   match rest[0] {
     @lex.Let =>
       match rest[1] {
@@ -334,7 +333,6 @@ fn stmt(rest : ArrayView[@lex.Token]) -> (@types.Syntax, ArrayView[@lex.Token]) 
     @lex.If => if_expr(rest)
     _ => {
       let ( _, tmp_rest) = get_expr(rest)
-      println("rest tk \{tmp_rest[0]}")
       if checkToken(tmp_rest, @lex.Assign) {
         assign_stmt(rest)
       } else {
@@ -623,7 +621,6 @@ fn get_or_apply_level_expr(
         rest = new_rest
         rest = skip(rest, @lex.Rbracket) // ']'
         syn = @types.Syntax::Get(syn, exp_syn)
-        println("Get syn: \{syn}, exp_syn : \{exp_syn}")
         continue
       }
       @lex.Lparen => { // get_or_apply_level_expr '(' (expr (',' expr)*)? ')'
@@ -665,7 +662,6 @@ fn get_or_apply_level_expr(
 fn value_expr(
   rest : ArrayView[@lex.Token]
 ) -> (@types.Syntax, ArrayView[@lex.Token]) {
-  println("rest \{rest[0]}")
   match rest[0] { //对应上方规则，判断是哪一种value_expr
     @lex.Lparen =>
       match rest[1] {
@@ -859,7 +855,6 @@ fn type_annotation(
   rest : ArrayView[@lex.Token]
 ) -> (@types.Type, ArrayView[@lex.Token]) {
   let mut rest = rest
-  println("rest \{rest[0]}")
   let ty = match rest[0] {
     @lex.Unit => { // Unit
       rest = skip(rest, @lex.Unit)
