@@ -10,3 +10,8 @@ package moonbitlang/minimbt/parser
 
 // Extension Methods
 
+fn parse(source_code: String) -> @types.Syntax {
+  let context:@lex.Context = {str: source_code, offset: 0, array: []}
+  @lex.lex(context)
+  prog(context)
+}
