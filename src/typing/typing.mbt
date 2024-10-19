@@ -2,16 +2,23 @@
 pub let extenv : Map[String, @types.Type] = {
   "print_int": Fun([Int], Unit),
   "print_char": Fun([Int], Unit),
-  //todo;
+  ""
 }
 
+
+
 struct LocalCtx @immut/hashmap.T[String, Ty]
+
+
 
 
 // 类型缺失时生成新变量
 fn new_tear() -> Type{
     Var(~t = None)
 }
+
+
+
 
 
 //找到变量类型
@@ -26,8 +33,10 @@ fn repr(self: Type) -> Type{
     }
 }
 
+
+
 //归一化
-//fn unify(t1: Ty, t2: Ty) -> Unit!TyErr{
+fn unify(t1: Ty, t2: Ty) -> Unit!TyErr{
     let t1 = t1.repr()
     let t2 = t2.repr()
     if physical_equal(t1, t2) {return}
@@ -68,6 +77,9 @@ fn repr(self: Type) -> Type{
         _ => raise TyErr
     }
 }
+
+
+
 
 
 //类型推断
@@ -180,6 +192,9 @@ fn infer(ctx : LocalCtx, e : Syntax) -> Type!TyErr {
 }
 
 
+
+
+
 //类型清理
 fn deref_type(t:Type) -> Type{
     match t {
@@ -199,6 +214,9 @@ fn deref_type(t:Type) -> Type{
         t => t
     }
 }
+
+
+
 
 
 // 对整个语法树进行清理
@@ -254,6 +272,9 @@ fn deref_term(syntax: Syntax) -> Syntax {
         _ => syntax
     }
 }
+
+
+
 
 
 //主函数
