@@ -1,5 +1,7 @@
 pub typealias LocalEnv = @immut/hashmap.T[String, Type]
 
+// Assuming Op is defined in a module named 'operations'
+
 struct KnfEnv {
   mut counter : Int
   externals : @immut/hashmap.T[String, Type]
@@ -28,6 +30,63 @@ fn KnfEnv::new_named_temp(self : KnfEnv, name : Name) -> Name {
   { ..name, slot: counter }
 }
 
-pub fn KnfEnv::to_knf(self : KnfEnv, s : @types.Syntax) -> Knf { // !Failure
-  abort("todo")
+pub fn KnfEnv::to_knf!(self : KnfEnv, s : @types.Syntax) -> Knf { 
+  match s {
+    Unit => Knf::Unit
+    Int(i) => Knf::Int(i)
+    Bool(b) => Knf::Int(if b { 1 } else { 0 })
+    Double(d) => Knf::Double(d)
+    Neg(x, ..) => Knf::Neg(new_named_temp(self, @types.Name::from_string!(x.to_string())))
+    Var(x) => Knf::Var(new_named_temp(self, @types.Name::from_string!(x)))
+    Tuple(xs) => {
+      let names: Array[Name] = Array::new()
+      for x in xs {
+        names.push(new_named_temp(self, @types.Name::from_string!(x.to_string())))
+      }
+      Knf::Tuple(names)
+    }
+    Prim(a, b, op, ..) => {
+      if op == @types.Op::Add {
+        let a_name:@types.Name = new_named_temp(self, @types.Name::from_string!(a.to_string()))
+        let b_name:@types.Name = new_named_temp(self, @types.Name::from_string!(b.to_string()))
+        Knf:: Let((a_name, getTypeFromSynax(a)), to_knf!(self, a), 
+          Knf:: Let((b_name, getTypeFromSynax(b)), to_knf!(self, b), 
+            Knf:: Add(a_name, b_name)
+          )
+        )
+      }
+      else if op == @types.Op::Sub {
+        let a_name:@types.Name = new_named_temp(self, @types.Name::from_string!(a.to_string()))
+        let b_name:@types.Name = new_named_temp(self, @types.Name::from_string!(b.to_string()))
+        Knf:: Let((a_name, getTypeFromSynax(a)), to_knf!(self, a), 
+          Knf:: Let((b_name, getTypeFromSynax(b)), to_knf!(self, b), 
+            Knf:: Sub(a_name, b_name)
+          )
+        )
+      }
+      else if op == @types.Op::Mul {
+        let a_name:@types.Name = new_named_temp(self, @types.Name::from_string!(a.to_string()))
+        let b_name:@types.Name = new_named_temp(self, @types.Name::from_string!(b.to_string()))
+        Knf:: Let((a_name, getTypeFromSynax(a)), to_knf!(self, a), 
+          Knf:: Let((b_name, getTypeFromSynax(b)), to_knf!(self, b), 
+            Knf:: Mul(a_name, b_name)
+          )
+        )
+      }
+      else if op == @types.Op::Div {
+        let a_name:@types.Name = new_named_temp(self, @types.Name::from_string!(a.to_string()))
+        let b_name:@types.Name = new_named_temp(self, @types.Name::from_string!(b.to_string()))
+        Knf:: Let((a_name, getTypeFromSynax(a)), to_knf!(self, a), 
+          Knf:: Let((b_name, getTypeFromSynax(b)), to_knf!(self, b), 
+            Knf:: Div(a_name, b_name)
+          )
+        )
+      }
+      else {
+        abort("todo")
+      }
+    }
+  }
+  // abort("todo")
+
 }
