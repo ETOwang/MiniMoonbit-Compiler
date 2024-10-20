@@ -2,47 +2,62 @@
 pub let extenv : Map[String, @types.Type] = {
   "print_int": Fun([Int], Unit),
   "print_char": Fun([Int], Unit),
-  ""
 }
 
+type LocalCtx @immut/hashmap.T[String, @types.Type]
 
-
-struct LocalCtx @immut/hashmap.T[String, Ty]
-
-
-
+// pub enum Type {
+//   Unit
+//   Bool
+//   Int
+//   Double
+//   Fun(Array[Type], Type) // (_, _, _) -> _
+//   Tuple(Array[Type]) // (_, _, _)
+//   Array(Type) // Array[_]
+//   Var(mut ~t : Type?) // Var(Ref[Type?])
+//   Ptr
+// } derive(Show)
 
 // 类型缺失时生成新变量
-fn new_tear() -> Type{
-    Var(~t = None)
+fn new_tvar() -> @types.Type {
+  Var(Ref::new(None))
 }
-
-
-
-
 
 //找到变量类型
-fn repr(self: Type) -> Type{
-    match self{
-        Var(~t = Some(ty)) as tvar =>{
-            let actual_ty = ty.repr()
-            tvar.t = Some(actual_ty)
-            actual_ty
-        }
-        ty => ty
+// fn repr(self : @types.Type) -> @types.Type {
+//   match self {
+//     Var(t=Ref::Some(ty)) as tvar => {
+//       let actual_ty = ty.repr()
+//       tvar.t = Some(actual_ty)
+//       actual_ty
+//     }
+//     ty => ty
+//   }
+// }
+fn repr(self : @types.Type) -> @types.Type {
+  match self {
+    Var(t=Ref(None)) as tvar => {
+      // 处理 Var(Ref::new(None)) 的情况
+      tvar.t = Ref(Some(Type::Unit)) // 或者其他默认类型
+      Type::Unit // 或者其他默认类型
     }
+    Var(t=Some(ty)) as tvar => {
+      let actual_ty = ty.repr()
+      tvar.t = Some(actual_ty)
+      actual_ty
+    }
+    ty => ty
+  }
 }
 
-
-
 //归一化
-fn unify(t1: Ty, t2: Ty) -> Unit!TyErr{
+fn unify(t1: Type, t2: Type) -> Unit!TyErr{
     let t1 = t1.repr()
     let t2 = t2.repr()
     if physical_equal(t1, t2) {return}
     match(t1, t2){
         (Int, Int) | (Bool, Bool) => ()
-        (TVar(~t=None) as tvar, ty) | (ty, TVar(~t=None) as tvar) => {
+        (Var(t=None) as tvar, ty) | (ty, Var(t=None) as tvar) => {
             check_occur!(tvar, ty)
             tvar.t = Some(ty)
         }
@@ -81,9 +96,8 @@ fn unify(t1: Ty, t2: Ty) -> Unit!TyErr{
 
 
 
-
 //类型推断
-fn infer(ctx : LocalCtx, e : Syntax) -> Type!TyErr {
+fn infer(ctx : LocalCtx, e : @types.Syntax) -> @types.Type!TyErr {
     match e {
         Int(_) => Int; Bool(_) => Bool
         Double(_) => Double
@@ -91,10 +105,11 @@ fn infer(ctx : LocalCtx, e : Syntax) -> Type!TyErr {
         match ctx._[x] {
             Some(t) => t
             //新类型变量
-            None =>
+            None =>{
                 let t = new_tvar()
                 extenv[x] = t
                 t
+            }
         }
 
         //递归函数类型推导
@@ -223,8 +238,8 @@ fn deref_type(t:Type) -> Type{
 fn deref_term(syntax: Syntax) -> Syntax {
     match syntax {
         //整数、布尔值、变量无需处理
-        Int(_) | Bool(_) => syntax,
-        Var(x) => Var(x),
+        Int(_) | Bool(_) => syntax
+        Var(x) => Var(x)
 
         // 对 let 表达式，清理绑定的类型和剩余部分
         Let(x, t, expr1, expr2) => {
@@ -235,17 +250,17 @@ fn deref_term(syntax: Syntax) -> Syntax {
         }
 
         // 对递归函数 letrec 表达式，清理函数体及其他部分
-        LetRec { name, params, body, rest } => {
+        LetRec (name, params, body, rest) => {
             let new_body = deref_term(*body);
             let new_rest = deref_term(*rest);
-            LetRec {
+            LetRec (
                 name: (name.0, deref_type(name.1)),
                 params: params.into_iter()
                     .map(|(param, ty)| (param, deref_type(ty)))
                     .collect(),
                 body: Box::new(new_body),
                 rest: Box::new(new_rest),
-            }
+            )
         }
 
         // 对函数应用表达式，清理函数及参数类型
@@ -278,7 +293,7 @@ fn deref_term(syntax: Syntax) -> Syntax {
 
 
 //主函数
-pub fn typing(e : Syntax) -> Syntax!TyErr {
+pub fn typing(e : @types.Syntax) -> @types.Syntax!TyErr {
   unify!(Unit, infer!(@immut/sorted_map.empty(), e))
   for ext_f, ext_t in extenv {
     extenv[ext_f] = deref_type(ext_t)
