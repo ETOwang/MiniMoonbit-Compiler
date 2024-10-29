@@ -257,7 +257,7 @@ fn nontop_fn_decl(
     rest = new_rest
   }
   rest = skip(rest, @lex.Rparen)
-  let mut ret_ty = @types.Type::Unit // 没写返回值就认为是Unit
+  let mut ret_ty = @types.Type::Var(Ref::new(None)) // 没写返回值就认为是Unit
   if checkToken(rest, @lex.Arrow) { // 解析函数返回值
     rest = skip(rest, @lex.Arrow)
     let (ty, new_rest) = type_annotation(rest)
