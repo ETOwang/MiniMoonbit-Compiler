@@ -48,8 +48,6 @@ fn repr(ty : @types.Type) -> @types.Type {
 }
 
 fn check_occur(tvar : @types.Type, ty : @types.Type) -> Unit!TyErr {
-  logger("check_occur: " + tvar.to_string())
-  logger("check_occur: " + ty.to_string())
   if occur_check(tvar, ty) {
     raise TyErr::Other("Type variable occurs in type")
   }
@@ -93,8 +91,6 @@ fn unify(t1 : @types.Type, t2 : @types.Type) -> Unit!TyErr {
   match (t1, t2) {
     (Int, Int) | (Bool, Bool) | (Double, Double) | (Unit, Unit) => ()
     (Var(t) as tvar, ty) | (ty, Var(t) as tvar) => {
-      logger("unify Var: " + ty.to_string())
-      logger("unify Var: " + tvar.to_string())
       check_occur!(tvar, ty)
       t.val = Some(ty)
     }
@@ -102,8 +98,6 @@ fn unify(t1 : @types.Type, t2 : @types.Type) -> Unit!TyErr {
     //handle the function, tuple, and array Type
     // 函数类型处理
     (Fun(params1, ret1), Fun(params2, ret2)) => {
-      logger("unify Fun1: " + params1.to_string() + " " + ret1.to_string())
-      logger("unify Fun2: " + params2.to_string() + " " + ret2.to_string())
       if params1.length() != params2.length() {
         raise TyErr::Mismatch(
           t1, t2, "Function parameter count mismatch at Line 99",
@@ -114,7 +108,6 @@ fn unify(t1 : @types.Type, t2 : @types.Type) -> Unit!TyErr {
         let p2 = params2[index]
         unify!(p1, p2)
       }
-      logger("unify here " + ret1.to_string())
       unify!(ret1, ret2)
     }
 
@@ -165,10 +158,7 @@ fn infer(ctx : LocalCtx, e : @types.Syntax) -> @types.Type!TyErr {
         env_with_params = env_with_params.add(p.0, p.1)
       }
       let body_ty = infer!(env_with_params, body)
-      logger("infer body_ty: " + body_ty.to_string())
       unify!(t, Fun(params_ty, body_ty))
-      logger("infer t: " + t.to_string())
-      logger("infer Fun(params_ty, body_ty): " + rest.to_string())
       infer!(env_with_f, rest)
     }
 
@@ -180,11 +170,7 @@ fn infer(ctx : LocalCtx, e : @types.Syntax) -> @types.Type!TyErr {
       for a in args {
         args_ty.push(infer!(ctx, a))
       }
-      logger("infer App: " + f.to_string())
-      logger("infer App_args: " + args_ty.to_string())
-      logger("infer App_f_ty: " + f_ty.to_string())
       unify!(f_ty, Fun(args_ty, ret_ty))
-      logger("infer App_ret: " + ret_ty.to_string())
       ret_ty
     }
 
@@ -286,8 +272,8 @@ fn infer(ctx : LocalCtx, e : @types.Syntax) -> @types.Type!TyErr {
     Array(lhs, rhs) => {
       let first = infer!(ctx, lhs)
       let second = infer!(ctx, rhs)
-      unify!(first, second)
-      Array(first)
+      let types = [first, second]
+      Tuple(types)
     }
 
     //If推导
