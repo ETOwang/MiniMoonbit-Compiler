@@ -361,7 +361,7 @@ fn infer(ctx : LocalCtx, e : @types.Syntax) -> @types.Type!TyErr {
         }
         _ =>
           raise TyErr::Mismatch(
-            vector_ty, subscript_ty, "Put vector type mismatch at Line 262",
+            vector_ty, subscript_ty, "Put vector type mismatch at Line 364",
           )
       }
     }
