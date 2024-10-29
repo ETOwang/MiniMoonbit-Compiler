@@ -47,7 +47,9 @@
 pub fn parse(source_code : String) -> @types.Syntax {
   let context : @lex.Context = { str: source_code, offset: 0, array: [] }
   @lex.lex(context)
-  prog(context)
+  let var = prog(context)
+  println("var: \{var}")
+  var
 }
 
 // prog: top_level* EOF
@@ -333,7 +335,7 @@ fn stmt(rest : ArrayView[@lex.Token]) -> (@types.Syntax, ArrayView[@lex.Token]) 
     @lex.Fn => fn_decl_stmt(rest)
     @lex.If => if_expr(rest)
     _ => {
-      let ( _, tmp_rest) = get_expr(rest)
+      let (_, tmp_rest) = get_expr(rest)
       println("rest tk \{tmp_rest[0]}")
       if checkToken(tmp_rest, @lex.Assign) {
         assign_stmt(rest)
@@ -379,7 +381,7 @@ fn let_tuple_stmt(
     match ty {
       @types.Type::Tuple(arr) => ty_arr = arr
     }
-  } 
+  }
   // 需要返回（name，type）的形式，对identifiers和ty_arr重新组合
   let ident_arr = []
   let mut i = 0
@@ -387,7 +389,7 @@ fn let_tuple_stmt(
     if not(ty_arr.is_empty()) {
       ident_arr.push((identifiers[i], ty_arr[i]))
     } else {
-      ident_arr.push((identifiers[i], @types.Type::Var({val: None})))
+      ident_arr.push((identifiers[i], @types.Type::Var({ val: None })))
     }
     i = i + 1
   }
