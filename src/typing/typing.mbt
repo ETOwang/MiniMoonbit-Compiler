@@ -140,7 +140,11 @@ fn infer(ctx : LocalCtx, e : @types.Syntax) -> @types.Type!TyErr {
     Double(_) => Double
     Var(x) =>
       match ctx._[x] {
-        Some(t) => t
+        Some(t) =>
+          match t {
+            Fun(_, ret_ty) => ret_ty
+            _ => t
+          }
         //新类型变量
         None => {
           let t = new_tvar()
@@ -272,8 +276,8 @@ fn infer(ctx : LocalCtx, e : @types.Syntax) -> @types.Type!TyErr {
     Array(lhs, rhs) => {
       let first = infer!(ctx, lhs)
       let second = infer!(ctx, rhs)
-      let types = [first, second]
-      Tuple(types)
+      unify!(first, second)
+      Array(first)
     }
 
     //If推导
@@ -315,7 +319,7 @@ fn infer(ctx : LocalCtx, e : @types.Syntax) -> @types.Type!TyErr {
         }
         _ =>
           raise TyErr::Mismatch(
-            vector_ty, subscript_ty, "Get vector type mismatch at Line 236",
+            vector_ty, subscript_ty, "Get vector type mismatch at Line 318",
           )
       }
     }
