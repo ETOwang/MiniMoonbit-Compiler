@@ -69,104 +69,6 @@ fn KnfEnv::new_named_temp(self : KnfEnv, name : Name) -> Name {
 
 
 
-// 提取Knf中的自由变量，和alpha变换有关
-fn fv(expr: Knf) -> Set[Name] {
-  let varNameSet :Set[Name] = Set::new();
-    match expr {
-        Unit | Int(_) | Double(_) | ExternalArray(_) => return varNameSet
-        Neg(x) | FNeg(x) => {
-          varNameSet.insert(x)
-          return varNameSet
-        }
-        Add(x, y) | Sub(x, y) | FAdd(x, y) | FSub(x, y) | FMul(x, y) | FDiv(x, y) | Get(x, y) => {
-          varNameSet.insert(x)
-          varNameSet.insert(y)
-          return varNameSet
-        }
-        IfEq(x, y, e1, e2) | IfLe(x, y, e1, e2) => {
-          varNameSet.insert(x)
-          varNameSet.insert(y)
-          ignore(varNameSet.union(fv(e1)))
-          ignore(varNameSet.union(fv(e2)))
-          return varNameSet
-        }
-        Let((x, t), e1, e2) => {
-          ignore(varNameSet.remove(x))
-          let  varInE2 = fv(e2)
-          for item in varInE2 {
-            ignore(varNameSet.remove(item))
-          }
-          ignore(varNameSet.union(fv(e1)))
-          varNameSet
-          //  S.union(fv(e1), S. remove(x, fv(e2)))
-        }
-        Var(x) => {
-          varNameSet.insert(x)
-          return varNameSet
-        }
-        LetRec({name :n, ty: t, args: params, body: e1}, e2) => {
-          let varInE1 = fv(e1)
-          let varInParams:Set[Name] = Set::new()
-          for item in params {
-            varInParams.insert(item.0)
-          }
-          for item in varInE1 {
-            if varInParams.contains(item) == false {
-              varNameSet.insert(item)
-            }
-          }
-          let varInE2 = fv(e2)
-          ignore(varInE2.union(varNameSet))
-          varNameSet.remove(n)
-          return varNameSet
-          // let zs = Set::difference(fv(e1), Set::of_list(List::map(fst, params)))
-          //   let zs = Set.difference(fv(e1), S.of_list(List.map(fst, yts)));
-          //   S.diff(S.union(zs, fv(e2)), S.singleton(x))
-        } 
-        Apply(x, ys) => {
-          for item in ys {
-            if varNameSet.contains(item) == false {
-              varNameSet.insert(item)
-            }
-          }
-          if varNameSet.contains(x) {
-            varNameSet.remove(x)
-          }
-          return varNameSet
-        }
-        Tuple(xs) | ExternalFunctionApplication(_, xs) => {
-          for item in xs {
-            if varNameSet.contains(item) == false {
-              varNameSet.insert(item)
-            }
-          }
-          return varNameSet
-        }
-        Put(x, y, z) => {
-          varNameSet.insert(x)
-          varNameSet.insert(y)
-          varNameSet.insert(z)
-          return varNameSet
-        }
-        LetTuple(xs, y, e) => {
-          varNameSet.insert(y)
-          let varInE = fv(e)
-          let varInXs:Set[Name] = Set::new()
-          for item in xs {
-            varInXs.insert(item.0)
-          }
-          for item in varInE {
-            if varInXs.contains(item) == false {
-              varNameSet.insert(item)
-            }
-          }
-          ignore(varNameSet.union(fv(e)))
-          return varNameSet
-        } 
-        // S.add(y, S.diff(fv(e), S.of_list(List.map(fst, xs))))
-    }
-}
-
 
 
 fn insert_let(self : KnfEnv, e: Knf, t: Type, k: (Name) -> Knf) -> Knf  {
@@ -348,11 +250,14 @@ pub fn KnfEnv::to_knf(self : KnfEnv, s : @types.Syntax) -> Knf {
       for items in yts {
         ignore(addVarToEnv(newEnv, items.0, getVarFromEnv(self, items.0).0, items.1))
       }
-      LetRec({name: xName,ty: t,  args: ytsName, body: to_knf(newEnv, e1)}, to_knf(self, e2))
+      let k1 = to_knf(newEnv, e1)
+      // println("sssssss")
+      let k2 = to_knf(self, e2)
+      LetRec({name: xName,ty: t,  args: ytsName, body: k1}, k2)
     }
 
     App(Var(f), e2s) => {
-      if self.externals.find(f).is_empty() {
+      if self.externals.find(f) != None {
         let external = self.externals.find(f).unwrap()
         match external {
           Fun(_, t) => {

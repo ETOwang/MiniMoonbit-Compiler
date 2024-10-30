@@ -1,0 +1,33 @@
+fn externals() -> @immut/hashmap.T[String, @types.Type] {
+  @immut/hashmap.T::new()
+  .add("read_int", @types.Fun([], Int))
+  .add("read_char", @types.Fun([], Int))
+  .add("print_int", @types.Fun([Int], Unit))
+  .add("print_char", @types.Fun([Int], Unit))
+  .add("print_endline", @types.Fun([], Unit))
+  .add("create_array", @types.Fun([Int, Int], @types.Type::Array(Int)))
+  .add(
+    "create_float_array",
+    @types.Fun([Int, Double], @types.Type::Array(Double)),
+  )
+  .add("create_ptr_array", @types.Fun([Int, Ptr], @types.Type::Array(Ptr)))
+  .add("truncate", @types.Fun([Double], Int))
+  .add("sin", @types.Fun([Double], Double))
+  .add("cos", @types.Fun([Double], Double))
+  .add("sqrt", @types.Fun([Double], Double))
+  .add("abs_float", @types.Fun([Double], Double))
+  .add("int_of_float", @types.Fun([Double], Int))
+  .add("float_of_int", @types.Fun([Int], Double))
+}
+
+test {
+  let input = @fs.read_file_to_string!(path = "test/test_src/print.mbt")
+  let parse=@parser.parse(input)
+  let typechecked=@typing.wrapper(parse)
+  println(typechecked)
+  let knf_env = KnfEnv::new(externals())
+  let knf:Knf = to_knf(knf_env, typechecked)
+  println("KNF:")
+  println(knf)
+  inspect!(knf, content="")
+}
