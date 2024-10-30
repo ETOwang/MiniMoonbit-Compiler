@@ -17,7 +17,7 @@ pub let extenv : Map[String, @types.Type] = {
 }
 
 pub fn logger(msg : String) -> Unit {
-  println(msg)
+  //println(msg)
 }
 
 type LocalCtx @immut/hashmap.T[String, @types.Type]

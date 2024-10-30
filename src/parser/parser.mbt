@@ -862,7 +862,6 @@ fn type_annotation(
   rest : ArrayView[@lex.Token]
 ) -> (@types.Type, ArrayView[@lex.Token]) {
   let mut rest = rest
-  println("rest \{rest[0]}")
   let ty = match rest[0] {
     @lex.Unit => { // Unit
       rest = skip(rest, @lex.Unit)
