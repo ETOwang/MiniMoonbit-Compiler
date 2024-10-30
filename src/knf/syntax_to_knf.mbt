@@ -287,7 +287,7 @@ pub fn KnfEnv::to_knf(self : KnfEnv, s : @types.Syntax) -> Knf {
             let xs : Array[Name] = Array::new()
             fn bind(xs : Array[Name]) -> Knf {
               if e2s.is_empty() {
-                return ExternalFunctionApplication(f, xs)
+                return ExternalFunctionApplication("minimbt_" + f, xs)
               } else {
                 let e2 = e2s.pop().unwrap()
                 let k2 = to_knf(self, e2)
