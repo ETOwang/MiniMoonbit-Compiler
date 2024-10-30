@@ -275,8 +275,16 @@ pub fn KnfEnv::to_knf(self : KnfEnv, s : @types.Syntax) -> Knf {
       let k1 = to_knf(newEnv, e1)
       // println(e2)
       let k2 = to_knf(self, e2)
-      LetRec({ name: xName, ty: t, args: ytsName, body: k1 }, k2)
+      if x != "main" {
+        LetRec({ name: xName, ty: t, args: ytsName, body: k1 }, k2)
+      } else {
+        LetRec({ name: xName, ty: t, args: ytsName, body: k1 }, Apply(xName, []))
+      }
+        
     }
+
+
+
     App(Var(f), e2s) => {
       if self.externals.find(f) != None {
         // println(f)
