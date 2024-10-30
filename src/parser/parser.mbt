@@ -45,9 +45,12 @@
 // } derive(Show)
 
 pub fn parse(source_code : String) -> @types.Syntax {
+  println(source_code)
   let context : @lex.Context = { str: source_code, offset: 0, array: [] }
   @lex.lex(context)
-  prog(context)
+  let var = prog(context)
+  println("var: \{var}")
+  var
 }
 
 // prog: top_level* EOF
@@ -255,7 +258,7 @@ fn nontop_fn_decl(
     rest = new_rest
   }
   rest = skip(rest, @lex.Rparen)
-  let mut ret_ty = @types.Type::Unit // 没写返回值就认为是Unit
+  let mut ret_ty = @types.Type::Var(Ref::new(None)) // 没写返回值就认为是Unit
   if checkToken(rest, @lex.Arrow) { // 解析函数返回值
     rest = skip(rest, @lex.Arrow)
     let (ty, new_rest) = type_annotation(rest)
@@ -377,7 +380,7 @@ fn let_tuple_stmt(
     match ty {
       @types.Type::Tuple(arr) => ty_arr = arr
     }
-  } 
+  }
   // 需要返回（name，type）的形式，对identifiers和ty_arr重新组合
   let ident_arr = []
   let mut i = 0
@@ -385,7 +388,7 @@ fn let_tuple_stmt(
     if not(ty_arr.is_empty()) {
       ident_arr.push((identifiers[i], ty_arr[i]))
     } else {
-      ident_arr.push((identifiers[i], @types.Type::Var({val: None})))
+      ident_arr.push((identifiers[i], @types.Type::Var({ val: None })))
     }
     i = i + 1
   }
