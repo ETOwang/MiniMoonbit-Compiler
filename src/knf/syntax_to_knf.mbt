@@ -459,9 +459,9 @@ pub fn KnfEnv::to_knf(self : KnfEnv, s : @types.Syntax) -> Knf {
             get_knf_type(self, e2Knf),
             fn(y : Name) -> Knf {
               let l = match e2 {
-                Double(_) => "create_float_array"
-                Int(_) => "create_array"
-                _ => "create_ptr_array"
+                Double(_) => "minimbt_create_float_array"
+                Int(_) => "minimbt_create_array"
+                _ => "minimbt_create_ptr_array"
               }
               ExternalFunctionApplication(l, [x, y])
             },
