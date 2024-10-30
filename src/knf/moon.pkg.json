@@ -5,7 +5,6 @@
       "alias": "types"
     },
     "moonbitlang/minimbt/util",
-
     "moonbitlang/minimbt/parser",
     "moonbitlang/minimbt/typing"
   ],
@@ -13,6 +12,5 @@
     "moonbitlang/minimbt/parser",
     "moonbitlang/minimbt/lex",
     "moonbitlang/minimbt/typing"
-
   ]
 }
