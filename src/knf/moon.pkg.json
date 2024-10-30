@@ -5,12 +5,14 @@
       "alias": "types"
     },
     "moonbitlang/minimbt/util",
+    "moonbitlang/x/fs",
     "moonbitlang/minimbt/parser",
     "moonbitlang/minimbt/typing"
   ],
   "test-import": [
     "moonbitlang/minimbt/parser",
     "moonbitlang/minimbt/lex",
-    "moonbitlang/minimbt/typing"
+    "moonbitlang/minimbt/typing",
+    "moonbitlang/x/fs"
   ]
 }
