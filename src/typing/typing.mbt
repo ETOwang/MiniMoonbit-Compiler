@@ -351,19 +351,11 @@ fn infer(ctx : LocalCtx, e : @types.Syntax) -> @types.Type!TyErr {
       unify!(var_ty, var.1)
       infer!(ctx._.add(var.0, var.1), rest)
     }
-    Put(vector, subscript, rest) => {
-      let vector_ty = repr(infer!(ctx, vector))
-      let subscript_ty = infer!(ctx, subscript)
-      match vector_ty {
-        Array(_) => {
-          unify!(subscript_ty, Int)
-          infer!(ctx, rest)
-        }
-        _ =>
-          raise TyErr::Mismatch(
-            vector_ty, subscript_ty, "Put vector type mismatch at Line 364",
-          )
-      }
+    Put(lhs, rhs, rest) => {
+      let lhs_ty = repr(infer!(ctx, lhs))
+      let rhs_ty = repr(infer!(ctx, rhs))
+      unify!(lhs_ty, rhs_ty)
+      infer!(ctx, rest)
     }
   }
 }
