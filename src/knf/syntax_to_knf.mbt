@@ -114,7 +114,7 @@ pub fn get_knf_type(self : KnfEnv, knf : Knf) -> Type {
     Knf::Let(_, _, body) => get_knf_type(self, body) // 假设 Let 返回 body 的类型
     Knf::Var(name) => getTypeFromName(self, name)
     Knf::LetRec(_, body) => get_knf_type(self, body) // 假设 LetRec 返回 body 的类型
-    Knf::Apply(_, _) => Type::Int // 假设 Apply 返回 Int 类型
+    Knf::Apply(ret, _) => getTypeFromName(self, ret) // 假设 Apply 返回 Int 类型
     Knf::Tuple(elements) => {
       let types : Array[Type] = Array::new()
       for element in elements {
@@ -289,11 +289,13 @@ pub fn KnfEnv::to_knf(self : KnfEnv, s : @types.Syntax) -> Knf {
                 return ExternalFunctionApplication(f, xs)
               } else {
                 let e2 = e2s.pop().unwrap()
+                let k2 = to_knf(self, e2)
                 insert_let(
                   self,
-                  to_knf(self, e2),
+                  k2,
                   t,
-                  fn(y : Name) -> Knf { bind(xs) },
+                  fn(y : Name) -> Knf { xs.push(y) 
+                  bind(xs) },
                 )
               }
             }
@@ -318,14 +320,18 @@ pub fn KnfEnv::to_knf(self : KnfEnv, s : @types.Syntax) -> Knf {
                     return Apply(f1, xs)
                   } else {
                     let e2 = e2s.pop().unwrap()
+                    let k2 = to_knf(self, e2)
                     insert_let(
                       self,
-                      to_knf(self, e2),
+                      k2,
                       t,
-                      fn(y : Name) -> Knf { bind(xs) },
+                      fn(y : Name) -> Knf { 
+                        xs.push(y)
+                        bind(xs) },
                     )
                   }
                 }
+                // println(f)
                 bind(xs)
               },
             )
@@ -338,7 +344,7 @@ pub fn KnfEnv::to_knf(self : KnfEnv, s : @types.Syntax) -> Knf {
       // println(e1)
       let e1Knf = to_knf(self, e1)
       let e1Type = get_knf_type(self, e1Knf)
-      // println(e1)
+      // println(e1Type)
       match e1Type {
         Fun(_, t) =>
           insert_let(
@@ -352,11 +358,13 @@ pub fn KnfEnv::to_knf(self : KnfEnv, s : @types.Syntax) -> Knf {
                   return Apply(f, xs)
                 } else {
                   let e2 = e2s.pop().unwrap()
+                  let k2 = to_knf(self, e2)
                   insert_let(
                     self,
-                    to_knf(self, e2),
+                    k2,
                     t,
-                    fn(y : Name) -> Knf { bind(xs) },
+                    fn(y : Name) -> Knf { xs.push(y)
+                    bind(xs) },
                   )
                 }
               }
@@ -364,7 +372,10 @@ pub fn KnfEnv::to_knf(self : KnfEnv, s : @types.Syntax) -> Knf {
               bind(xs)
             },
           )
-        _ => abort("Not a function")
+        _ => {
+          // println("Wrong type")
+          abort("Not a function")
+        }
       }
     }
     Tuple(es) => {
