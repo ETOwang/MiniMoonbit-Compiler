@@ -291,7 +291,7 @@ pub fn KnfEnv::to_knf(self : KnfEnv, s : @types.Syntax) -> Knf {
               } else {
                 let e2 = e2s.pop().unwrap()
                 let k2 = to_knf(self, e2)
-                println(e2)
+                // println(e2)
                 let t1 = get_knf_type(self, k2)
                 insert_let(
                   self,
