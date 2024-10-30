@@ -5,16 +5,14 @@
       "alias": "types"
     },
     "moonbitlang/minimbt/util",
-    "lijunchen/unstable_io/env",
+    "moonbitlang/x/fs",
     "moonbitlang/minimbt/parser",
-    "moonbitlang/minimbt/typing",
-    "moonbitlang/x/fs"
+    "moonbitlang/minimbt/typing"
   ],
   "test-import": [
     "moonbitlang/minimbt/parser",
     "moonbitlang/minimbt/lex",
     "moonbitlang/minimbt/typing",
-    "moonbitlang/minimbt/bin",
     "moonbitlang/x/fs"
   ]
 }
