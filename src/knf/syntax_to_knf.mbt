@@ -283,6 +283,7 @@ pub fn KnfEnv::to_knf(self : KnfEnv, s : @types.Syntax) -> Knf {
         let external = self.externals.find(f).unwrap()
         match external {
           Fun(_, t) => {
+            // println(f + " " + t.to_string());
             let xs : Array[Name] = Array::new()
             fn bind(xs : Array[Name]) -> Knf {
               if e2s.is_empty() {
@@ -290,10 +291,12 @@ pub fn KnfEnv::to_knf(self : KnfEnv, s : @types.Syntax) -> Knf {
               } else {
                 let e2 = e2s.pop().unwrap()
                 let k2 = to_knf(self, e2)
+                println(e2)
+                let t1 = get_knf_type(self, k2)
                 insert_let(
                   self,
                   k2,
-                  t,
+                  t1,
                   fn(y : Name) -> Knf { xs.push(y) 
                   bind(xs) },
                 )
@@ -321,10 +324,11 @@ pub fn KnfEnv::to_knf(self : KnfEnv, s : @types.Syntax) -> Knf {
                   } else {
                     let e2 = e2s.pop().unwrap()
                     let k2 = to_knf(self, e2)
+                    let t1 = get_knf_type(self, k2)
                     insert_let(
                       self,
                       k2,
-                      t,
+                      t1,
                       fn(y : Name) -> Knf { 
                         xs.push(y)
                         bind(xs) },
@@ -359,10 +363,11 @@ pub fn KnfEnv::to_knf(self : KnfEnv, s : @types.Syntax) -> Knf {
                 } else {
                   let e2 = e2s.pop().unwrap()
                   let k2 = to_knf(self, e2)
+                  let t1 = get_knf_type(self, k2)
                   insert_let(
                     self,
                     k2,
-                    t,
+                    t1,
                     fn(y : Name) -> Knf { xs.push(y)
                     bind(xs) },
                   )
