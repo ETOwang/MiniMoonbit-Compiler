@@ -338,7 +338,7 @@ pub fn KnfEnv::to_knf(self : KnfEnv, s : @types.Syntax) -> Knf {
       // println(e1)
       let e1Knf = to_knf(self, e1)
       let e1Type = get_knf_type(self, e1Knf)
-      println(e1)
+      // println(e1)
       match e1Type {
         Fun(_, t) =>
           insert_let(
