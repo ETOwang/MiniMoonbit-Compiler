@@ -5,21 +5,40 @@ pub typealias LocalEnv = @immut/hashmap.T[String, Type]
 struct KnfEnv {
   mut counter : Int
   externals : @immut/hashmap.T[String, Type]
-
-  name_and_type : @moonbitlang/core/hashmap.T[Name, Type]
+  signTable: @immut/hashmap.T[String, (Name, Type)]
+  name_and_type : @immut/hashmap.T[Name, Type]
 }
 
-struct SignTable { 
-  table : Map[String, (Name, Type)]
-}
-let signTable : SignTable = {table: Map::new()}
-let externalSignTable : Map[String, (Name, Type)] = Map::new()
 
-pub fn getTypeFromSynax(s: @types.Syntax) -> Type {
-  Type::Unit
+pub fn addVarToEnv(env: KnfEnv, s: String, n: Name, t: Type) -> Bool {
+  if (env.signTable[s] != None && env.signTable[s].unwrap().1 == Type::Unit) {
+    ignore(env.signTable.remove(s))
+    ignore(env.signTable.add(s, (n, t)))
+    ignore(env.name_and_type.add(n, t))
+    return true
+  }
+  ignore(env.signTable.add(s, (n, t)))
+  ignore(env.name_and_type.add(n, t))
+  true
 }
+
+pub fn getVarFromEnv(env: KnfEnv, s: String) -> (Name, Type) {
+  match env.signTable[s] {
+    Some((n, t)) => (n, t)
+    None => (Name::slot_only(0), Type::Unit)
+  }
+}
+
+pub fn getTypeFromName(env: KnfEnv, n: Name) -> Type {
+  match env.name_and_type[n] {
+    Some(t) => t
+    None => abort("Type not found")
+  }
+}
+
+
 pub fn KnfEnv::new(externals : @immut/hashmap.T[String, Type]) -> KnfEnv {
-  { counter: 1, externals, name_and_type: @moonbitlang/core/hashmap.T::new() }
+  {counter: 1, externals, signTable: @immut/hashmap.T::new(), name_and_type: @immut/hashmap.T::new()}
 }
 
 pub fn KnfEnv::init_counter_from_existing(
@@ -27,6 +46,12 @@ pub fn KnfEnv::init_counter_from_existing(
   existing : Knf
 ) -> Unit {
   self.counter = knf_max_counter(existing) + 1
+}
+
+pub fn KnfEnv::init_env_from_existing(
+  env : KnfEnv,
+) -> KnfEnv {
+  {counter: env.counter, externals: env.externals, signTable: env.signTable, name_and_type: env.name_and_type}
 }
 
 fn KnfEnv::new_temp(self : KnfEnv) -> Name {
@@ -41,24 +66,6 @@ fn KnfEnv::new_named_temp(self : KnfEnv, name : Name) -> Name {
   { ..name, slot: counter }
 }
 
-// fn bind (f: String, xs: Array[Name], e2s: Array[@types.Syntax], self: KnfEnv, t: Type, ifExternal: Bool) -> Knf {
-//   if (e2s.is_empty()) {
-//     if ifExternal {
-//       return ExternalFunctionApplication(f, xs)
-//     }
-//     else {
-//       let fName = signTable.table.get(f).unwrap().0
-//       return Apply(fName, xs)
-//     }
-//   }
-//   else {
-//     let e2 = e2s.pop().unwrap()
-//     insert_let(self, to_knf(self, e2), t, fn (y: Name) -> Knf {
-//       xs.push(y)
-//       bind(f, xs, e2s, self, t, ifExternal)
-//     })
-//   }
-// }
 
 
 
@@ -198,33 +205,25 @@ pub fn get_knf_type(self: KnfEnv, knf: Knf) -> Type {
       get_knf_type(self, true_case)
     }
     Knf::Let(_, _, body) => get_knf_type(self, body) // 假设 Let 返回 body 的类型
-    Knf::Var(name) => {
-      match self.name_and_type.get(name) {
-        Some(ty) => ty
-        None => abort("Type not found for variable: \{name}")
-      }
-    }
+    Knf::Var(name) => getTypeFromName(self, name)
     Knf::LetRec(_, body) => get_knf_type(self, body) // 假设 LetRec 返回 body 的类型
     Knf::Apply(_, _) => Type::Int // 假设 Apply 返回 Int 类型
     Knf::Tuple(elements) => {
       let types: Array[Type] = Array::new();
       for element in elements {
-        types.push(Type::Int); // 这里统一用 Int 代替，实际应该根据具体元素类型来处理
+        types.push(getTypeFromName(self, element));
       }
       Type::Tuple(types) // 返回包含具体类型的元组
     }
     Knf::LetTuple(_, _, body) => get_knf_type(self, body) // 假设 LetTuple 返回 body 的类型
-    Knf::Get(_, _) => Type::Int // 假设 Get 返回 Int 类型
-    Knf::Put(_, _, _) => Type::Unit // 假设 Put 返回 Unit 类型
+    Knf::Get(array, _) => getTypeFromName(self, array) // 假设 Get 返回 Int 类型
+    Knf::Put(_, _, e3) => getTypeFromName(self, e3) // 假设 Put 返回 Unit 类型
     Knf::ExternalArray(_) => Type::Array(Type::Int)
     Knf::ExternalFunctionApplication(_, _) => Type::Unit
     // 可以添加更多变体的处理...
   }
 }
 
-pub fn addVarToEnv(self: KnfEnv, x: String, t: Type) -> Name {
-  return new_temp(self)
-}
 
 pub fn KnfEnv::to_knf(self : KnfEnv, s : @types.Syntax) -> Knf { 
   match s {
@@ -236,66 +235,25 @@ pub fn KnfEnv::to_knf(self : KnfEnv, s : @types.Syntax) -> Knf {
 
     Double(d) => Knf::Double(d)
 
-    // Var(x) => Knf::Var(new_temp(self))
-    
-    
-    // 对每一个子节点递归调用 to_knf!，然后将结果作为参数构建新的 Knf
-    // Tuple(elements) => {
-    //   let mut bindings: Array[(Name, Knf)] = []
-    //   let mut child_names : Array[Name] = []
-      
-    //   // 使用 LetTuple 将所有绑定组合在一起
-    //   let mut tuple_type:Array[(Name, Type)] =  []// 先转换为数组
-    //   let tuple_name = new_temp(self); // 创建新的元组名称
-    //   Knf::LetTuple(
-    //     {
-    //       for elem in elements {
-    //         let name = new_temp(self) // 生成唯一名称
-    //         let knf_elem = to_knf(self, elem) // 递归转换
-    //         let child = Knf::Let((name, get_knf_type(self, knf_elem)), knf_elem, knf_elem)
-    //         child_names.push(name)
-    //         bindings.push((name, child))
-    //       } // 保存绑定
-    //       for binding in bindings {
-    //         tuple_type.push((binding.0, get_knf_type(self, binding.1))) // 提取名字和类型
-    //       } 
-    //       else {
-    //         tuple_type
-    //       }
-    //     }, 
-    //     tuple_name, 
-    //     Knf::Tuple(
-    //         child_names
-    //     )); // 组合为 LetTuple
-    //   // let mut bindings = []
-    //   // let mut knf_elements = []
-
-    //   // for elem in elements {
-    //   //   let name = new_temp(self) // 生成唯一名称
-    //   //   let knf_elem = to_knf!(self, elem) // 递归转换
-    //   //   bindings.push((name, knf_elem)) // 保存绑定
-    //   //   knf_elements.push(Knf::Var(name)) // 使用变量
-    //   // }
-
-    //   // // 从后往前创建 Let 绑定
-    //   // let mut result = knf_elements.pop().unwrap() // 先取出最后一个元素
-    //   // while  bindings.length() > 0 {
-    //   //   let binding_tmp = bindings.pop().unwrap() // 逐个取出绑定
-    //   //   let tmp:(Name, Type) = (binding_tmp.0, get_knf_type(self, binding_tmp.1))
-    //   //   let knf_element = knf_elements.pop().unwrap() // 逐个取出元素
-    //   //   result = Knf::Let(tmp, knf_element, result); // 逐步构建 ANF
-    //   // }
-    //   // result
-    // }
-
 
     // NOT: Let((newName, type), childSynax, FNeg)
     Not(inner) => {
       to_knf(self, If(inner, Int(1), Int(0)))
     }
 
-    Neg(inner, ..) => {
-      insert_let(self, to_knf(self, inner), Type::Int, fn (x: Name) -> Knf { Neg(x) })
+    Neg(inner, kind = k) => {
+      match k {
+        Some(@types.Kind::Int) => {
+          insert_let(self, to_knf(self, inner), Type::Int, fn (x: Name) -> Knf { Neg(x) })
+        }
+        Some(@types.Kind::Double) => {
+          insert_let(self, to_knf(self, inner), Type::Double, fn (x: Name) -> Knf { FNeg(x) })
+        }
+        None => {
+          abort("Kind not found")
+        }
+      }
+      // insert_let(self, to_knf(self, inner), Type::Int, fn (x: Name) -> Knf { Neg(x) })
     }
 
     Eq(_, _) | LE(_, _) as cmp => {
@@ -307,21 +265,25 @@ pub fn KnfEnv::to_knf(self : KnfEnv, s : @types.Syntax) -> Knf {
     }
 
     If(Eq(e1, e2), e3, e4) => {
-      insert_let(self, to_knf(self, e1), Type::Unit, fn (x: Name) -> Knf {
-        insert_let(self, to_knf(self, e2), Type::Unit, fn (y: Name) -> Knf {
-          let e3tmp = to_knf(self, e3)
-          let e4tmp = to_knf(self, e4)
-          IfEq(x, y, e3tmp, e4tmp)
+      let k1 = to_knf(self, e1)
+      let k2 = to_knf(self, e2)
+      let k3 = to_knf(self, e3)
+      let k4 = to_knf(self, e4)
+      insert_let(self, k1, get_knf_type(self, k1), fn (x: Name) -> Knf {
+        insert_let(self, k2, get_knf_type(self, k2), fn (y: Name) -> Knf {
+          IfEq(x, y, k3, k4)
         })
       })
     }
 
     If(LE(e1, e2), e3, e4) => {
-      insert_let(self, to_knf(self, e1), Type::Unit, fn (x: Name) -> Knf {
-        insert_let(self, to_knf(self, e2), Type::Unit, fn (y: Name) -> Knf {
-          let e3tmp = to_knf(self, e3)
-          let e4tmp = to_knf(self, e4)
-          IfLe(x, y, e3tmp, e4tmp)
+      let k1 = to_knf(self, e1)
+      let k2 = to_knf(self, e2)
+      let k3 = to_knf(self, e3)
+      let k4 = to_knf(self, e4)
+      insert_let(self, k1, get_knf_type(self, k1), fn (x: Name) -> Knf {
+        insert_let(self, k2, get_knf_type(self, k2), fn (y: Name) -> Knf {
+          IfLe(x, y, k3, k4)
         })
       })
     }
@@ -336,7 +298,8 @@ pub fn KnfEnv::to_knf(self : KnfEnv, s : @types.Syntax) -> Knf {
     //   Let((x, t), e1', e2'), t2
     Let((x, t), e1, e2) => {
       let e1tmp = to_knf(self, e1)
-      let xName = addVarToEnv(self, x, t)
+      let xName = new_temp(self)
+      ignore(addVarToEnv(self, x, xName, t))
       let e2tmp = to_knf(self, e2)
       Let((xName, t), e1tmp, e2tmp)
     }
@@ -347,51 +310,53 @@ pub fn KnfEnv::to_knf(self : KnfEnv, s : @types.Syntax) -> Knf {
   //     | Type.Array(_) as t -> ExtArray x, t
   //     | _ -> failwith (Printf.sprintf "external variable %s does not have an array type" x))
     Var(x) => {
-      if signTable.table.get(x).is_empty() == false {
-        let xName:Name = signTable.table.get(x).unwrap().0
-        Knf::Var(xName)
-      }
-      else {
-        let external = self.externals.find(x)
-        match external.unwrap() {
-          Array(_) => {
-            ExternalArray(externalSignTable.get(x).unwrap().0)
-          }
-          _ => abort("External variable does not have an array type")
-        }
-      }
+      Knf::Var(getVarFromEnv(self, x).0)
+      // if getVarFromEnv(self, x).0.name == None {
+      //   if (self.externals.find(x) != None) {
+      //       let external = self.externals.find(x)
+      //       match external.unwrap() {
+      //       Fun(args_types, return_type) => {
+      //         ExternalFunctionApplication(x, [])
+      //       }
+      //       _ => abort("External variable does not have an array type")
+      //     }
+      //   }
+      //   else {
+      //     let xName = (new_temp(self));
+      //     ignore(addVarToEnv(self, x, xName, Type::Unit));
+      //     Knf::Var(xName)
+      //   }
+      // }
+      // else  {
+      //   Knf::Var(getVarFromEnv(self, x).0)
+      // }
     }
 
     LetRec({name: (x, t), args: yts, body: e1}, e2) => {
-      let xName = addVarToEnv(self, x, t)
-      let e2Tmp = to_knf(self, e2)
+      let xName = new_temp(self)
+      let argsType: Array[Type] = Array::new()
+      for item in yts {
+        argsType.push(item.1)
+      }
+      ignore(addVarToEnv(self, x, xName, Type::Fun(argsType, t)))
       let ytsName = []
       for item in yts {
-        ytsName.push((addVarToEnv(self, item.0, item.1), item.1))
+        let yName = new_temp(self)
+        ytsName.push((yName, item.1))
       }
-      LetRec({name: xName,ty: t,  args: ytsName, body: to_knf(self, e1)}, e2Tmp)
+      let newEnv = init_env_from_existing(self);
+      for items in yts {
+        ignore(addVarToEnv(newEnv, items.0, getVarFromEnv(self, items.0).0, items.1))
+      }
+      LetRec({name: xName,ty: t,  args: ytsName, body: to_knf(newEnv, e1)}, to_knf(self, e2))
     }
 
     App(Var(f), e2s) => {
-      if signTable.table.get(f).is_empty() {
+      if self.externals.find(f).is_empty() {
         let external = self.externals.find(f).unwrap()
         match external {
           Fun(_, t) => {
             let xs: Array[Name] = Array::new()
-
-            // let bind = fn (xs: Array[Name], e2s: Array[@types.Syntax], self: KnfEnv, t: Type) -> Knf {
-            //   loop e2s, xs {  
-            //     [], xs => break ExternalFunctionApplication(f, xs) // break 可以省略
-            //     _, xs => continue e2s, xs 
-            //     // {
-            //     //   let e2 = e2s.pop().unwrap()
-            //     //   ignore(insert_let(self, to_knf(self, e2), t, fn (y: Name) -> Knf {
-            //     //     bind(xs.push(y), e2s, self, t)
-            //     //   }))
-            //     // }
-            //   }
-            // }
-
             fn bind (xs: Array[Name]) -> Knf {
               if (e2s.is_empty()) {
                 return ExternalFunctionApplication(f, xs)
@@ -439,12 +404,15 @@ pub fn KnfEnv::to_knf(self : KnfEnv, s : @types.Syntax) -> Knf {
     }
 
     Tuple(es) => {
-      let  xs: Array[Name] = Array::new()
-      let  ts: Array[Type] = Array::new()
+      let xs: Array[Name] = Array::new()
+      let ts: Array[Type] = Array::new()
+      let elementKnf: Array[Knf] = Array::new()
       for e in es {
-        let x = new_temp(self) // TODO: 需要取得变量名字
+        let x = new_temp(self)
         xs.push(x)
-        let t = getTypeFromSynax(e)
+        let k = to_knf(self, e)
+        elementKnf.push(k)
+        let t = get_knf_type(self, k)
         ts.push(t)
       }
       fn bind(xs: Array[Name], es: Array[@types.Syntax], self: KnfEnv) -> Knf {
@@ -453,7 +421,9 @@ pub fn KnfEnv::to_knf(self : KnfEnv, s : @types.Syntax) -> Knf {
         }
         else {
           let e = es.pop().unwrap()
-          insert_let(self, to_knf(self, e), Type::Int, fn (y: Name) -> Knf {
+          let k = elementKnf.pop().unwrap()
+          let t = ts.pop().unwrap()
+          insert_let(self, k, t, fn (y: Name) -> Knf {
             xs.push(y)
             bind(xs, es, self)
           })
@@ -468,7 +438,9 @@ pub fn KnfEnv::to_knf(self : KnfEnv, s : @types.Syntax) -> Knf {
         fn(y: Name) -> Knf {
           let xtsName = []
           for item in xts {
-            xtsName.push((addVarToEnv(self, item.0, item.1), item.1))
+            let newName = new_temp(self)
+            ignore(addVarToEnv(self, item.0, newName, item.1))
+            xtsName.push((newName, item.1))
           }
           LetTuple(xtsName, y, to_knf(self, e2))
       })
@@ -477,15 +449,17 @@ pub fn KnfEnv::to_knf(self : KnfEnv, s : @types.Syntax) -> Knf {
 
 
     Array(e1, e2) => {
-      insert_let(self, to_knf(self, e1), getTypeFromSynax(e1), 
+      let k1 = to_knf(self, e1)
+      insert_let(self, to_knf(self, e1), Type::Int, 
         fn (x: Name) -> Knf {
           let e2Knf = to_knf(self, e2)
-          insert_let(self, e2Knf, getTypeFromSynax(e2), 
+          insert_let(self, e2Knf, get_knf_type(self, e2Knf), 
             fn (y: Name) -> Knf {
               let l = { 
                 match e2 {
-                  Double(_) => "create_double_array"
-                  _ => "create_array"
+                  Double(_) => "create_float_array"
+                  Int(_) => "create_array"
+                  _ => "create_ptr_array"
                 }
               }
               ExternalFunctionApplication(l, [x, y])
@@ -512,11 +486,14 @@ pub fn KnfEnv::to_knf(self : KnfEnv, s : @types.Syntax) -> Knf {
     }
 
     Put(e1, e2, e3) => {
-      insert_let (self, to_knf(self, e1), getTypeFromSynax(e1), 
+      let k1 = to_knf(self, e1)
+      let k2 = to_knf(self, e2)
+      let k3 = to_knf(self, e3)
+      insert_let (self, k1, get_knf_type(self, k1), 
         fn (x: Name) -> Knf {
-          insert_let(self, to_knf(self, e2), getTypeFromSynax(e2), 
+          insert_let(self, k2, get_knf_type(self, k2),
             fn (y: Name) -> Knf {
-              insert_let(self, to_knf(self, e3), getTypeFromSynax(e3), 
+              insert_let(self, k3, get_knf_type(self, k3),
                 fn (z: Name) -> Knf {
                   Put(x, y, z)
                 })
@@ -532,76 +509,76 @@ pub fn KnfEnv::to_knf(self : KnfEnv, s : @types.Syntax) -> Knf {
   
     Prim(a, b, op, kind = k) => {
       if op == @types.Op::Add && k == Some(@types.Kind::Int) {
-        let a_name:@types.Name = new_temp(self)
-        let b_name:@types.Name = new_temp(self)
-        Knf:: Let((a_name, getTypeFromSynax(a)), to_knf(self, a), 
-          Knf:: Let((b_name, getTypeFromSynax(b)), to_knf(self, b), 
-            Knf:: Add(a_name, b_name)
-          )
-        )
+        let ka = to_knf(self, a)
+        let kb = to_knf(self, b)
+        insert_let(self, ka, Type::Int, fn (x: Name) -> Knf {
+          insert_let(self, kb, Type::Int, fn (y: Name) -> Knf {
+            Add(x, y)
+          })
+        })
       }
       else if op == @types.Op::Add && k == Some(@types.Kind::Double) {
-        let a_name:@types.Name = new_temp(self)
-        let b_name:@types.Name = new_temp(self)
-        Knf:: Let((a_name, getTypeFromSynax(a)), to_knf(self, a), 
-          Knf:: Let((b_name, getTypeFromSynax(b)), to_knf(self, b), 
-            Knf:: FAdd(a_name, b_name)
-          )
-        )
+        let ka = to_knf(self, a)
+        let kb = to_knf(self, b)
+        insert_let(self, ka, Type::Double, fn (x: Name) -> Knf {
+          insert_let(self, kb, Type::Double, fn (y: Name) -> Knf {
+            FAdd(x, y)
+          })
+        })
       }
       else if op == @types.Op::Sub && k == Some(@types.Kind::Int) {
-        let a_name:@types.Name = new_temp(self)
-        let b_name:@types.Name = new_temp(self)
-        Knf:: Let((a_name, getTypeFromSynax(a)), to_knf(self, a), 
-          Knf:: Let((b_name, getTypeFromSynax(b)), to_knf(self, b), 
-            Knf:: Sub(a_name, b_name)
-          )
-        )
+        let ka = to_knf(self, a)
+        let kb = to_knf(self, b)
+        insert_let(self, ka, Type::Int, fn (x: Name) -> Knf {
+          insert_let(self, kb, Type::Int, fn (y: Name) -> Knf {
+            Sub(x, y)
+          })
+        })
       }
       else if op == @types.Op::Sub && k == Some(@types.Kind::Double) {
-        let a_name:@types.Name = new_temp(self)
-        let b_name:@types.Name = new_temp(self)
-        Knf:: Let((a_name, getTypeFromSynax(a)), to_knf(self, a), 
-          Knf:: Let((b_name, getTypeFromSynax(b)), to_knf(self, b), 
-            Knf:: FSub(a_name, b_name)
-          )
-        )
+        let ka = to_knf(self, a)
+        let kb = to_knf(self, b)
+        insert_let(self, ka, Type::Int, fn (x: Name) -> Knf {
+          insert_let(self, kb, Type::Int, fn (y: Name) -> Knf {
+            FSub(x, y)
+          })
+        })
       }
       else if op == @types.Op::Mul && k == Some(@types.Kind::Int) {
-        let a_name:@types.Name = new_temp(self)
-        let b_name:@types.Name = new_temp(self)
-        Knf:: Let((a_name, getTypeFromSynax(a)), to_knf(self, a), 
-          Knf:: Let((b_name, getTypeFromSynax(b)), to_knf(self, b), 
-            Knf:: Mul(a_name, b_name)
-          )
-        )
+        let ka = to_knf(self, a)
+        let kb = to_knf(self, b)
+        insert_let(self, ka, Type::Int, fn (x: Name) -> Knf {
+          insert_let(self, kb, Type::Int, fn (y: Name) -> Knf {
+            Mul(x, y)
+          })
+        })
       }
       else if op == @types.Op::Mul && k == Some(@types.Kind::Double) {
-        let a_name:@types.Name = new_temp(self)
-        let b_name:@types.Name = new_temp(self)
-        Knf:: Let((a_name, getTypeFromSynax(a)), to_knf(self, a), 
-          Knf:: Let((b_name, getTypeFromSynax(b)), to_knf(self, b), 
-            Knf:: FMul(a_name, b_name)
-          )
-        )
+        let ka = to_knf(self, a)
+        let kb = to_knf(self, b)
+        insert_let(self, ka, Type::Int, fn (x: Name) -> Knf {
+          insert_let(self, kb, Type::Int, fn (y: Name) -> Knf {
+            FMul(x, y)
+          })
+        })
       }
       else if op == @types.Op::Div && k == Some(@types.Kind::Int) {
-        let a_name:@types.Name = new_temp(self)
-        let b_name:@types.Name = new_temp(self)
-        Knf:: Let((a_name, getTypeFromSynax(a)), to_knf(self, a), 
-          Knf:: Let((b_name, getTypeFromSynax(b)), to_knf(self, b), 
-            Knf:: Div(a_name, b_name)
-          )
-        )
+        let ka = to_knf(self, a)
+        let kb = to_knf(self, b)
+        insert_let(self, ka, Type::Int, fn (x: Name) -> Knf {
+          insert_let(self, kb, Type::Int, fn (y: Name) -> Knf {
+            Div(x, y)
+          })
+        })
       }
       else if op == @types.Op::Div && k == Some(@types.Kind::Double) {
-        let a_name:@types.Name = new_temp(self)
-        let b_name:@types.Name = new_temp(self)
-        Knf:: Let((a_name, getTypeFromSynax(a)), to_knf(self, a), 
-          Knf:: Let((b_name, getTypeFromSynax(b)), to_knf(self, b), 
-            Knf:: Div(a_name, b_name)
-          )
-        )
+        let ka = to_knf(self, a)
+        let kb = to_knf(self, b)
+        insert_let(self, ka, Type::Int, fn (x: Name) -> Knf {
+          insert_let(self, kb, Type::Int, fn (y: Name) -> Knf {
+            FDiv(x, y)
+          })
+        })
       }
       else {
         abort("todo")
