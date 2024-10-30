@@ -20,14 +20,19 @@ fn externals() -> @immut/hashmap.T[String, @types.Type] {
   .add("float_of_int", @types.Fun([Int], Double))
 }
 
+
 test {
-  let input = @fs.read_file_to_string!(path = "test/test_src/print.mbt")
+  let input = @fs.read_file_to_string!(path = "test/test_src/fib.mbt")
   let parse=@parser.parse(input)
-  let typechecked=@typing.wrapper(parse)
+  let typechecked=@typing.typing!(parse)
   println(typechecked)
   let knf_env = KnfEnv::new(externals())
   let knf:Knf = to_knf(knf_env, typechecked)
   println("KNF:")
   println(knf)
+  let knf_interpreter = KnfInterpreter::new()
+  let result = knf_interpreter.eval_full!(knf)
+  
+  println("Result: " + result.to_string())
   inspect!(knf, content="")
 }
