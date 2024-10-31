@@ -541,19 +541,41 @@ pub fn KnfEnv::to_knf(self : KnfEnv, s : @types.Syntax) -> Knf {
       )
     }
     Prim(a, b, op, kind=k) =>
-      if op == @types.Op::Add && k == Some(@types.Kind::Int) {
+      if op == @types.Op::Add && (k == Some(@types.Kind::Int)) {
         let ka = to_knf(self, a)
         let kb = to_knf(self, b)
         // println(a)
         // println(b)
-        insert_let(
-          self,
-          ka,
-          Type::Int,
-          fn(x : Name) -> Knf {
-            insert_let(self, kb, Type::Int, fn(y : Name) -> Knf { Add(x, y) })
-          },
-        )
+        if (get_knf_type(self, ka) == Type::Double) {
+          insert_let(
+            self,
+            ka,
+            Type::Double,
+            fn(x : Name) -> Knf {
+              insert_let(self, kb, Type::Int, fn(y : Name) -> Knf { FAdd(x, y) })
+            },
+          )
+        }
+        else if (get_knf_type(self, kb) == Type::Double) {
+          insert_let(
+            self,
+            ka,
+            Type::Int,
+            fn(x : Name) -> Knf {
+              insert_let(self, kb, Type::Double, fn(y : Name) -> Knf { FAdd(x, y) })
+            },
+          )
+        }
+        else {
+          insert_let(
+            self,
+            ka,
+            Type::Int,
+            fn(x : Name) -> Knf {
+              insert_let(self, kb, Type::Int, fn(y : Name) -> Knf { Add(x, y) })
+            },
+          )
+        }
       } else if op == @types.Op::Add && k == Some(@types.Kind::Double) {
         let ka = to_knf(self, a)
         let kb = to_knf(self, b)
@@ -573,14 +595,36 @@ pub fn KnfEnv::to_knf(self : KnfEnv, s : @types.Syntax) -> Knf {
       } else if op == @types.Op::Sub && k == Some(@types.Kind::Int) {
         let ka = to_knf(self, a)
         let kb = to_knf(self, b)
-        insert_let(
-          self,
-          ka,
-          Type::Int,
-          fn(x : Name) -> Knf {
-            insert_let(self, kb, Type::Int, fn(y : Name) -> Knf { Sub(x, y) })
-          },
-        )
+        if (get_knf_type(self, ka) == Type::Double) {
+          insert_let(
+            self,
+            ka,
+            Type::Double,
+            fn(x : Name) -> Knf {
+              insert_let(self, kb, Type::Int, fn(y : Name) -> Knf { FSub(x, y) })
+            },
+          )
+        }
+        else if (get_knf_type(self, kb) == Type::Double) {
+          insert_let(
+            self,
+            ka,
+            Type::Int,
+            fn(x : Name) -> Knf {
+              insert_let(self, kb, Type::Double, fn(y : Name) -> Knf { FSub(x, y) })
+            },
+          )
+        }
+        else {
+          insert_let(
+            self,
+            ka,
+            Type::Int,
+            fn(x : Name) -> Knf {
+              insert_let(self, kb, Type::Int, fn(y : Name) -> Knf { Sub(x, y) })
+            },
+          )
+        }
       } else if op == @types.Op::Sub && k == Some(@types.Kind::Double) {
         let ka = to_knf(self, a)
         let kb = to_knf(self, b)
@@ -595,14 +639,36 @@ pub fn KnfEnv::to_knf(self : KnfEnv, s : @types.Syntax) -> Knf {
       } else if op == @types.Op::Mul && k == Some(@types.Kind::Int) {
         let ka = to_knf(self, a)
         let kb = to_knf(self, b)
-        insert_let(
-          self,
-          ka,
-          Type::Int,
-          fn(x : Name) -> Knf {
-            insert_let(self, kb, Type::Int, fn(y : Name) -> Knf { Mul(x, y) })
-          },
-        )
+        if (get_knf_type(self, ka) == Type::Double) {
+          insert_let(
+            self,
+            ka,
+            Type::Double,
+            fn(x : Name) -> Knf {
+              insert_let(self, kb, Type::Int, fn(y : Name) -> Knf { FMul(x, y) })
+            },
+          )
+        }
+        else if (get_knf_type(self, kb) == Type::Double) {
+          insert_let(
+            self,
+            ka,
+            Type::Int,
+            fn(x : Name) -> Knf {
+              insert_let(self, kb, Type::Double, fn(y : Name) -> Knf { FMul(x, y) })
+            },
+          )
+        }
+        else {
+          insert_let(
+            self,
+            ka,
+            Type::Int,
+            fn(x : Name) -> Knf {
+              insert_let(self, kb, Type::Int, fn(y : Name) -> Knf { Mul(x, y) })
+            },
+          )
+        }
       } else if op == @types.Op::Mul && k == Some(@types.Kind::Double) {
         let ka = to_knf(self, a)
         let kb = to_knf(self, b)
@@ -617,14 +683,36 @@ pub fn KnfEnv::to_knf(self : KnfEnv, s : @types.Syntax) -> Knf {
       } else if op == @types.Op::Div && k == Some(@types.Kind::Int) {
         let ka = to_knf(self, a)
         let kb = to_knf(self, b)
-        insert_let(
-          self,
-          ka,
-          Type::Int,
-          fn(x : Name) -> Knf {
-            insert_let(self, kb, Type::Int, fn(y : Name) -> Knf { Div(x, y) })
-          },
-        )
+        if (get_knf_type(self, ka) == Type::Double) {
+          insert_let(
+            self,
+            ka,
+            Type::Double,
+            fn(x : Name) -> Knf {
+              insert_let(self, kb, Type::Int, fn(y : Name) -> Knf { FDiv(x, y) })
+            },
+          )
+        }
+        else if (get_knf_type(self, kb) == Type::Double) {
+          insert_let(
+            self,
+            ka,
+            Type::Int,
+            fn(x : Name) -> Knf {
+              insert_let(self, kb, Type::Double, fn(y : Name) -> Knf { FDiv(x, y) })
+            },
+          )
+        }
+        else {
+          insert_let(
+            self,
+            ka,
+            Type::Int,
+            fn(x : Name) -> Knf {
+              insert_let(self, kb, Type::Int, fn(y : Name) -> Knf { Div(x, y) })
+            },
+          )
+        }
       } else if op == @types.Op::Div && k == Some(@types.Kind::Double) {
         let ka = to_knf(self, a)
         let kb = to_knf(self, b)
