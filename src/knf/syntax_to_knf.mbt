@@ -318,7 +318,15 @@ pub fn KnfEnv::to_knf(self : KnfEnv, s : @types.Syntax) -> Knf {
       for item in yts {
         argsType.push(item.1)
       }
-      ignore(addFuncToEnv(self, x, xName, Type::Fun(argsType, t)))
+      match t {
+        Type::Fun(_,_) => {
+          ignore(addFuncToEnv(self, x, xName, Type::Fun(argsType, t)))
+        }
+        _ => {
+          ignore(addVarToEnv(self, x, xName, Type::Fun(argsType, t)))
+        }
+      }
+      // ignore(addFuncToEnv(self, x, xName, Type::Fun(argsType, t)))
       // for item in self.signTable {
       //   println(item.0)
       // }
@@ -331,7 +339,15 @@ pub fn KnfEnv::to_knf(self : KnfEnv, s : @types.Syntax) -> Knf {
       let mut index = 0
       for items in yts {
         //println(items.0 + " " + items.1.to_string())
-        ignore(addVarToEnv(newEnv, items.0, ytsName[index].0, items.1))
+        match items.1 {
+          Type::Fun(_,_) => {
+            ignore(addFuncToEnv(newEnv, items.0, ytsName[index].0, items.1))
+          }
+          _ => {
+            ignore(addVarToEnv(newEnv, items.0, ytsName[index].0, items.1))
+          }
+        }
+        // ignore(addVarToEnv(newEnv, items.0, ytsName[index].0, items.1))
         index = index + 1
       }
       //println(e1)
