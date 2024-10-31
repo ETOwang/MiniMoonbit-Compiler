@@ -264,12 +264,10 @@ pub fn KnfEnv::to_knf(self : KnfEnv, s : @types.Syntax) -> Knf {
         ytsName.push((yName, item.1))
       }
       let newEnv = init_env_from_existing(self)
-      let mut index = 0;
+      let mut index = 0
       for items in yts {
         //println(items.0 + " " + items.1.to_string())
-        ignore(
-          addVarToEnv(newEnv, items.0, ytsName[index].0, items.1),
-        )
+        ignore(addVarToEnv(newEnv, items.0, ytsName[index].0, items.1))
         index = index + 1
       }
       let k1 = to_knf(newEnv, e1)
@@ -278,14 +276,13 @@ pub fn KnfEnv::to_knf(self : KnfEnv, s : @types.Syntax) -> Knf {
       if x != "main" {
         LetRec({ name: xName, ty: t, args: ytsName, body: k1 }, k2)
       } else {
-        LetRec({ name: xName, ty: t, args: ytsName, body: k1 }, Apply(xName, []))
+        LetRec(
+          { name: xName, ty: t, args: ytsName, body: k1 },
+          Apply(xName, []),
+        )
       }
-        
     }
-
-
-
-    App(Var(f), e2s) => {
+    App(Var(f), e2s) =>
       if self.externals.find(f) != None {
         // println(f)
         let external = self.externals.find(f).unwrap()
@@ -293,11 +290,13 @@ pub fn KnfEnv::to_knf(self : KnfEnv, s : @types.Syntax) -> Knf {
           Fun(_, t) => {
             // println(f + " " + t.to_string());
             let xs : Array[Name] = Array::new()
+            let mut index = 0
             fn bind(xs : Array[Name]) -> Knf {
-              if e2s.is_empty() {
+              if index == e2s.length() {
                 return ExternalFunctionApplication("minimbt_" + f, xs)
               } else {
-                let e2 = e2s.pop().unwrap()
+                let e2 = e2s[index]
+                index = index + 1
                 let k2 = to_knf(self, e2)
                 // println(e2)
                 let t1 = get_knf_type(self, k2)
@@ -305,8 +304,10 @@ pub fn KnfEnv::to_knf(self : KnfEnv, s : @types.Syntax) -> Knf {
                   self,
                   k2,
                   t1,
-                  fn(y : Name) -> Knf { xs.push(y) 
-                  bind(xs) },
+                  fn(y : Name) -> Knf {
+                    xs.push(y)
+                    bind(xs)
+                  },
                 )
               }
             }
@@ -326,20 +327,23 @@ pub fn KnfEnv::to_knf(self : KnfEnv, s : @types.Syntax) -> Knf {
               e1Type,
               fn(f1 : Name) -> Knf {
                 let xs : Array[Name] = Array::new()
+                let mut index = 0
                 fn bind(xs : Array[Name]) -> Knf {
-                  if e2s.is_empty() {
+                  if index == e2s.length() {
                     return Apply(f1, xs)
                   } else {
-                    let e2 = e2s.pop().unwrap()
+                    let e2 = e2s[index]
+                    index = index + 1
                     let k2 = to_knf(self, e2)
                     let t1 = get_knf_type(self, k2)
                     insert_let(
                       self,
                       k2,
                       t1,
-                      fn(y : Name) -> Knf { 
+                      fn(y : Name) -> Knf {
                         xs.push(y)
-                        bind(xs) },
+                        bind(xs)
+                      },
                     )
                   }
                 }
@@ -350,8 +354,6 @@ pub fn KnfEnv::to_knf(self : KnfEnv, s : @types.Syntax) -> Knf {
           _ => abort("Not a function")
         }
       }
-    }
-
     App(e1, e2s) => {
       // println(e1)
       let e1Knf = to_knf(self, e1)
@@ -365,19 +367,23 @@ pub fn KnfEnv::to_knf(self : KnfEnv, s : @types.Syntax) -> Knf {
             get_knf_type(self, e1Knf),
             fn(f : Name) -> Knf {
               let xs : Array[Name] = Array::new()
+              let mut index = 0
               fn bind(xs : Array[Name]) -> Knf {
-                if e2s.is_empty() {
+                if e2s.length() == index {
                   return Apply(f, xs)
                 } else {
-                  let e2 = e2s.pop().unwrap()
+                  let e2 = e2s[index]
+                  index = index + 1
                   let k2 = to_knf(self, e2)
                   let t1 = get_knf_type(self, k2)
                   insert_let(
                     self,
                     k2,
                     t1,
-                    fn(y : Name) -> Knf { xs.push(y)
-                    bind(xs) },
+                    fn(y : Name) -> Knf {
+                      xs.push(y)
+                      bind(xs)
+                    },
                   )
                 }
               }
@@ -385,10 +391,9 @@ pub fn KnfEnv::to_knf(self : KnfEnv, s : @types.Syntax) -> Knf {
               bind(xs)
             },
           )
-        _ => {
+        _ =>
           // println("Wrong type")
           abort("Not a function")
-        }
       }
     }
     Tuple(es) => {
