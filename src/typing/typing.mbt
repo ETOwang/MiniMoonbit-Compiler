@@ -54,34 +54,10 @@ fn check_occur(tvar : @types.Type, ty : @types.Type) -> Unit!TyErr {
 }
 
 // 定义 occur_check 函数，用于检查类型变量是否在类型中出现
+//check ty in tvar
 fn occur_check(tvar : @types.Type, ty : @types.Type) -> Bool {
-  match ty {
-    Var(ref_type) =>
-      match ref_type.val {
-        Some(inner_ty) => occur_check(tvar, inner_ty)
-        None =>
-          match tvar {
-            Var(temp) =>
-              match temp.val {
-                None => true
-                _ => false
-              }
-            _ => false
-          }
-      }
-    Fun(_, ret) => occur_check(tvar, ret)
-    // TODO:元组类型处理
-    Tuple(types) =>
-      for t in types {
-        if occur_check(tvar, t) {
-          break true
-        }
-      } else {
-        false
-      }
-    Array(inner_ty) => occur_check(tvar, inner_ty)
-    _ => false
-  }
+  //TODO
+  false
 }
 
 //归一化
