@@ -264,7 +264,14 @@ pub fn KnfEnv::to_knf(self : KnfEnv, s : @types.Syntax) -> Knf {
     Let((x, t), e1, e2) => {
       let e1tmp = to_knf(self, e1)
       let xName = new_temp(self)
-      ignore(addVarToEnv(self, x, xName, t))
+      match t {
+        Type::Fun(_,_) => {
+          ignore(addFuncToEnv(self, x, xName, t))
+        }
+        _ => {
+          ignore(addVarToEnv(self, x, xName, t))
+        }
+      }
       let e2tmp = to_knf(self, e2)
       Let((xName, t), e1tmp, e2tmp)
     }
@@ -276,13 +283,14 @@ pub fn KnfEnv::to_knf(self : KnfEnv, s : @types.Syntax) -> Knf {
     //     | _ -> failwith (Printf.sprintf "external variable %s does not have an array type" x))
     Var(x) => {
       let n = getVarFromEnv(self, x).0
-      // println("aaaaaa")
-      // for item in self.signTable {
-      //   println(item.0)
-      // }
-      // println(x)
-      // println(x + " " + n.to_string())
-      Knf::Var(n)
+      if (n.to_string() == "_0") {
+
+        let m = getFuncFromEnv(self, x).0
+        Knf::Var(m)
+      }
+      else {
+        Knf::Var(n)
+      }
       // if getVarFromEnv(self, x).0.name == None {
       //   if (self.externals.find(x) != None) {
       //       let external = self.externals.find(x)
