@@ -34,7 +34,13 @@ pub fn getVarFromEnv(env : KnfEnv, s : String) -> (Name, Type) {
 pub fn getTypeFromName(env : KnfEnv, n : Name) -> Type {
   match env.name_and_type[n] {
     Some(t) => t
-    None => abort("Type not found")
+    None => {
+      print("Type not found")
+      // for item in env.signTable {
+      //   println(item)
+      // }
+      abort("Type not found")
+    }
   }
 }
 
@@ -81,6 +87,7 @@ fn insert_let(self : KnfEnv, e : Knf, t : Type, k : (Name) -> Knf) -> Knf {
     _ => {
       let x = new_temp(self) // 生成一个临时标识符
       let e1 = k(x)
+      ignore(addVarToEnv(self, x.to_string(), x, t))
       return Let( // 调用继续函数，得到新的表达式和类型
         (x, t),
         e,
@@ -111,10 +118,15 @@ pub fn get_knf_type(self : KnfEnv, knf : Knf) -> Type {
     Knf::IfLe(_, _, true_case, false_case) =>
       // 假设 IfLe 返回 true_case 的类型
       get_knf_type(self, true_case)
-    Knf::Let(_, _, body) => get_knf_type(self, body) // 假设 Let 返回 body 的类型
+    Knf::Let(_, _, body) => {
+      //println("Let: " + body.to_string())
+      get_knf_type(self, body)
+    } // 假设 Let 返回 body 的类型
     Knf::Var(name) => getTypeFromName(self, name)
     Knf::LetRec(_, body) => get_knf_type(self, body) // 假设 LetRec 返回 body 的类型
-    Knf::Apply(ret, _) => getTypeFromName(self, ret) // 假设 Apply 返回 Int 类型
+    Knf::Apply(ret, _) => {
+      getTypeFromName(self, ret)
+    } // 假设 Apply 返回 Int 类型
     Knf::Tuple(elements) => {
       let types : Array[Type] = Array::new()
       for element in elements {
@@ -270,9 +282,11 @@ pub fn KnfEnv::to_knf(self : KnfEnv, s : @types.Syntax) -> Knf {
         ignore(addVarToEnv(newEnv, items.0, ytsName[index].0, items.1))
         index = index + 1
       }
+      //println(e1)
       let k1 = to_knf(newEnv, e1)
-      // println(e2)
+      //println("E2: " + e2.to_string())
       let k2 = to_knf(self, e2)
+      // println("e2 END")
       if x != "main" {
         LetRec({ name: xName, ty: t, args: ytsName, body: k1 }, k2)
       } else {
@@ -282,7 +296,8 @@ pub fn KnfEnv::to_knf(self : KnfEnv, s : @types.Syntax) -> Knf {
         )
       }
     }
-    App(Var(f), e2s) =>
+    App(Var(f), e2s) => {
+      // println("APP NAME: " + f + " " + "args: " + e2s.to_string())
       if self.externals.find(f) != None {
         // println(f)
         let external = self.externals.find(f).unwrap()
@@ -298,7 +313,8 @@ pub fn KnfEnv::to_knf(self : KnfEnv, s : @types.Syntax) -> Knf {
                 let e2 = e2s[index]
                 index = index + 1
                 let k2 = to_knf(self, e2)
-                // println(e2)
+                // println("E2: " + e2.to_string() + " K2: " + k2.to_string())
+                // println("Point")
                 let t1 = get_knf_type(self, k2)
                 insert_let(
                   self,
@@ -354,10 +370,12 @@ pub fn KnfEnv::to_knf(self : KnfEnv, s : @types.Syntax) -> Knf {
           _ => abort("Not a function")
         }
       }
+    }
     App(e1, e2s) => {
-      // println(e1)
       let e1Knf = to_knf(self, e1)
+      // println("APP: " + e1.to_string() + " " + e2s.to_string())
       let e1Type = get_knf_type(self, e1Knf)
+      // println("E1TYPE: " + e1Type.to_string())
       // println(e1Type)
       match e1Type {
         Fun(_, t) =>
@@ -370,12 +388,15 @@ pub fn KnfEnv::to_knf(self : KnfEnv, s : @types.Syntax) -> Knf {
               let mut index = 0
               fn bind(xs : Array[Name]) -> Knf {
                 if e2s.length() == index {
+                  // println(f.to_string() + " " + xs.to_string())
                   return Apply(f, xs)
                 } else {
                   let e2 = e2s[index]
+                  // println("E2: " + e2.to_string())
                   index = index + 1
                   let k2 = to_knf(self, e2)
                   let t1 = get_knf_type(self, k2)
+                  // println("T1: " + t1.to_string())
                   insert_let(
                     self,
                     k2,
