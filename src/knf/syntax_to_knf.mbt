@@ -6,6 +6,8 @@ struct KnfEnv {
   mut counter : Int
   externals : @immut/hashmap.T[String, Type]
   signTable : @hashmap.T[String, (Name, Type)]
+  funcTable : @hashmap.T[String, (Name, Type)]
+  func_name_and_type : @hashmap.T[Name, Type]
   name_and_type : @hashmap.T[Name, Type]
 }
 
@@ -21,6 +23,12 @@ pub fn addVarToEnv(env : KnfEnv, s : String, n : Name, t : Type) -> Bool {
   true
 }
 
+pub fn addFuncToEnv(env : KnfEnv, s : String, n : Name, t : Type) -> Bool {
+  env.funcTable[s] = (n, t)
+  env.func_name_and_type[n] = t
+  true
+}
+
 pub fn getVarFromEnv(env : KnfEnv, s : String) -> (Name, Type) {
   if env.signTable[s] != None {
     // println("vvvvv")
@@ -31,11 +39,26 @@ pub fn getVarFromEnv(env : KnfEnv, s : String) -> (Name, Type) {
   return (Name::slot_only(0), Type::Unit)
 }
 
+pub fn getFuncFromEnv(env : KnfEnv, s : String) -> (Name, Type) {
+  if env.funcTable[s] != None {
+    return env.funcTable[s].unwrap()
+  }
+  return (Name::slot_only(0), Type::Unit)
+}
+
 pub fn getTypeFromName(env : KnfEnv, n : Name) -> Type {
   match env.name_and_type[n] {
     Some(t) => t
     None => {
-      print("Type not found")
+      println(n)
+      for item in env.name_and_type {
+        println(item)
+      }
+      println("Func")
+      for item in env.func_name_and_type {
+        println(item)
+      }
+      println("Type not found1")
       // for item in env.signTable {
       //   println(item)
       // }
@@ -44,11 +67,14 @@ pub fn getTypeFromName(env : KnfEnv, n : Name) -> Type {
   }
 }
 
+
 pub fn KnfEnv::new(externals : @immut/hashmap.T[String, Type]) -> KnfEnv {
   {
     counter: 1,
     externals,
     signTable: @hashmap.T::new(),
+    func_name_and_type: @hashmap.T::new(),
+    funcTable: @hashmap.T::new(),
     name_and_type: @hashmap.T::new(),
   }
 }
@@ -65,6 +91,8 @@ pub fn KnfEnv::init_env_from_existing(env : KnfEnv) -> KnfEnv {
     counter: env.counter + 1,
     externals: env.externals,
     signTable: env.signTable,
+    funcTable: env.funcTable,
+    func_name_and_type: env.func_name_and_type,
     name_and_type: env.name_and_type,
   }
 }
@@ -122,15 +150,28 @@ pub fn get_knf_type(self : KnfEnv, knf : Knf) -> Type {
       //println("Let: " + body.to_string())
       get_knf_type(self, body)
     } // 假设 Let 返回 body 的类型
-    Knf::Var(name) => getTypeFromName(self, name)
+    Knf::Var(name) => {
+      if self.func_name_and_type[name] != None {
+        return self.func_name_and_type[name].unwrap()
+      }
+      getTypeFromName(self, name)
+    }
     Knf::LetRec(_, body) => get_knf_type(self, body) // 假设 LetRec 返回 body 的类型
     Knf::Apply(ret, _) => {
+      if self.func_name_and_type[ret] != None {
+        return self.func_name_and_type[ret].unwrap()
+      }
       getTypeFromName(self, ret)
     } // 假设 Apply 返回 Int 类型
     Knf::Tuple(elements) => {
       let types : Array[Type] = Array::new()
       for element in elements {
-        types.push(getTypeFromName(self, element))
+        if self.func_name_and_type[element] != None {
+        types.push(self.func_name_and_type[element].unwrap())
+        }
+        else {
+          types.push(getTypeFromName(self, element))
+        }
       }
       Type::Tuple(types) // 返回包含具体类型的元组
     }
@@ -168,7 +209,10 @@ pub fn KnfEnv::to_knf(self : KnfEnv, s : @types.Syntax) -> Knf {
             Type::Double,
             fn(x : Name) -> Knf { FNeg(x) },
           )
-        None => abort("Kind not found")
+        None => {
+          println("Type not found2")
+          abort("Kind not found")
+        }
       }
     // insert_let(self, to_knf(self, inner), Type::Int, fn (x: Name) -> Knf { Neg(x) })
     Eq(_, _) | LE(_, _) as cmp => to_knf(self, If(cmp, Int(1), Int(0)))
@@ -266,7 +310,7 @@ pub fn KnfEnv::to_knf(self : KnfEnv, s : @types.Syntax) -> Knf {
       for item in yts {
         argsType.push(item.1)
       }
-      ignore(addVarToEnv(self, x, xName, Type::Fun(argsType, t)))
+      ignore(addFuncToEnv(self, x, xName, Type::Fun(argsType, t)))
       // for item in self.signTable {
       //   println(item.0)
       // }
@@ -330,11 +374,14 @@ pub fn KnfEnv::to_knf(self : KnfEnv, s : @types.Syntax) -> Knf {
 
             bind(xs)
           }
-          _ => abort("External function not found")
+          _ => {
+            println("Type not found3")
+            abort("External function not found")
+          }
         }
       } else {
-        let e1Name = getVarFromEnv(self, f).0
-        let e1Type = getVarFromEnv(self, f).1
+        let e1Name = getFuncFromEnv(self, f).0
+        let e1Type = getFuncFromEnv(self, f).1
         match e1Type {
           Fun(_, t) =>
             insert_let(
@@ -367,7 +414,13 @@ pub fn KnfEnv::to_knf(self : KnfEnv, s : @types.Syntax) -> Knf {
                 bind(xs)
               },
             )
-          _ => abort("Not a function")
+          _ => {
+            for item in self.funcTable {
+              println(item)
+            }
+            println(f)
+            println("Type not found4")
+            abort("Not a function")}
         }
       }
     }
@@ -412,9 +465,11 @@ pub fn KnfEnv::to_knf(self : KnfEnv, s : @types.Syntax) -> Knf {
               bind(xs)
             },
           )
-        _ =>
-          // println("Wrong type")
+        _ =>{
+          // println("Wrong type") 
+          println("Type not found2")
           abort("Not a function")
+        }
       }
     }
     Tuple(es) => {
