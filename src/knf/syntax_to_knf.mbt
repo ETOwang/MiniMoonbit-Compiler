@@ -592,10 +592,10 @@ pub fn KnfEnv::to_knf(self : KnfEnv, s : @types.Syntax) -> Knf {
         _ => abort("Not an array")
       }
     }
-    Put(e1, e2, e3) => {
-      let k1 = to_knf(self, e1)
-      let k2 = to_knf(self, e2)
-      let k3 = to_knf(self, e3)
+    Put(Get(g1, g2), e2, e3) => {
+      let k1 = to_knf(self, g1)
+      let k2 = to_knf(self, g2)
+      let k3 = to_knf(self, e2)
       insert_let(
         self,
         k1,
@@ -610,7 +610,9 @@ pub fn KnfEnv::to_knf(self : KnfEnv, s : @types.Syntax) -> Knf {
                 self,
                 k3,
                 get_knf_type(self, k3),
-                fn(z : Name) -> Knf { Put(x, y, z) },
+                fn(z : Name) -> Knf { 
+                  Knf::Let((Name::slot_only(0), Type::Unit), Put(x, y, z), to_knf(self, e3))
+                },
               )
             },
           )
