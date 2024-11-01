@@ -152,7 +152,7 @@ fn infer(ctx : LocalCtx, e : @types.Syntax) -> @types.Type!TyErr {
 
     //一元负号推导
     Neg(expr, ~kind) as tvar => {
-      let ty = infer!(ctx, expr) // 推断表达式类型
+      let ty = repr(infer!(ctx, expr)) // 推断表达式类型
       match kind {
         Some(Int) => {
           unify!(ty, Int)
@@ -196,8 +196,8 @@ fn infer(ctx : LocalCtx, e : @types.Syntax) -> @types.Type!TyErr {
     }
     //二元算术推导
     Prim(lhs, rhs, _, ~kind) as tvar => {
-      let lhs_ty = infer!(ctx, lhs)
-      let rhs_ty = infer!(ctx, rhs)
+      let lhs_ty = repr(infer!(ctx, lhs))
+      let rhs_ty = repr(infer!(ctx, rhs))
       match kind {
         Some(Int) => {
           unify!(lhs_ty, Int)
@@ -282,8 +282,8 @@ fn infer(ctx : LocalCtx, e : @types.Syntax) -> @types.Type!TyErr {
       Tuple(types)
     }
     Get(vector, subscript) => {
-      let vector_ty = infer!(ctx, vector)
-      let subscript_ty = infer!(ctx, subscript)
+      let vector_ty = repr(infer!(ctx, vector))
+      let subscript_ty = repr(infer!(ctx, subscript))
       match vector_ty {
         Array(t) => {
           unify!(subscript_ty, Int)
