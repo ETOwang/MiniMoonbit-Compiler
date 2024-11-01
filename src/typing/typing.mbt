@@ -314,7 +314,7 @@ fn infer(ctx : LocalCtx, e : @types.Syntax) -> @types.Type!TyErr {
       }
     }
     LetTuple(types, tuple_expr, rest) => {
-      let tuple_ty = infer!(ctx, tuple_expr)
+      let tuple_ty = repr(infer!(ctx, tuple_expr))
       unify!(tuple_ty, Tuple(types.map(fn { (_, t) => t })))
       let mut env_with_params = ctx
       for index = 0; index < types.length(); index = index + 1 {
