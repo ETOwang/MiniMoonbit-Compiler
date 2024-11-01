@@ -6,13 +6,11 @@
     },
     "moonbitlang/minimbt/util",
     "moonbitlang/minimbt/parser",
-    "moonbitlang/minimbt/typing",
-    "moonbitlang/x/fs"
+    "moonbitlang/minimbt/typing"
   ],
   "test-import": [
     "moonbitlang/minimbt/parser",
     "moonbitlang/minimbt/lex",
-    "moonbitlang/minimbt/typing",
-    "moonbitlang/x/fs"
+    "moonbitlang/minimbt/typing"
   ]
 }
