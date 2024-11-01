@@ -145,10 +145,9 @@ pub fn get_knf_type(self : KnfEnv, knf : Knf) -> Type {
     Knf::IfLe(_, _, true_case, false_case) =>
       // 假设 IfLe 返回 true_case 的类型
       get_knf_type(self, true_case)
-    Knf::Let(_, _, body) => {
+    Knf::Let(_, _, body) =>
       //println("Let: " + body.to_string())
-      get_knf_type(self, body)
-    } // 假设 Let 返回 body 的类型
+      get_knf_type(self, body) // 假设 Let 返回 body 的类型
     Knf::Var(name) => {
       if self.func_name_and_type[name] != None {
         return self.func_name_and_type[name].unwrap()
@@ -166,9 +165,8 @@ pub fn get_knf_type(self : KnfEnv, knf : Knf) -> Type {
       let types : Array[Type] = Array::new()
       for element in elements {
         if self.func_name_and_type[element] != None {
-        types.push(self.func_name_and_type[element].unwrap())
-        }
-        else {
+          types.push(self.func_name_and_type[element].unwrap())
+        } else {
           types.push(getTypeFromName(self, element))
         }
       }
@@ -264,12 +262,8 @@ pub fn KnfEnv::to_knf(self : KnfEnv, s : @types.Syntax) -> Knf {
       let e1tmp = to_knf(self, e1)
       let xName = new_temp(self)
       match t {
-        Type::Fun(_,_) => {
-          ignore(addFuncToEnv(self, x, xName, t))
-        }
-        _ => {
-          ignore(addVarToEnv(self, x, xName, t))
-        }
+        Type::Fun(_, _) => ignore(addFuncToEnv(self, x, xName, t))
+        _ => ignore(addVarToEnv(self, x, xName, t))
       }
       let e2tmp = to_knf(self, e2)
       Let((xName, t), e1tmp, e2tmp)
@@ -282,12 +276,10 @@ pub fn KnfEnv::to_knf(self : KnfEnv, s : @types.Syntax) -> Knf {
     //     | _ -> failwith (Printf.sprintf "external variable %s does not have an array type" x))
     Var(x) => {
       let n = getVarFromEnv(self, x).0
-      if (n.to_string() == "_0") {
-
+      if n.to_string() == "_0" {
         let m = getFuncFromEnv(self, x).0
         Knf::Var(m)
-      }
-      else {
+      } else {
         Knf::Var(n)
       }
       // if getVarFromEnv(self, x).0.name == None {
@@ -318,12 +310,9 @@ pub fn KnfEnv::to_knf(self : KnfEnv, s : @types.Syntax) -> Knf {
         argsType.push(item.1)
       }
       match t {
-        Type::Fun(_,_) => {
+        Type::Fun(_, _) =>
           ignore(addFuncToEnv(self, x, xName, Type::Fun(argsType, t)))
-        }
-        _ => {
-          ignore(addVarToEnv(self, x, xName, Type::Fun(argsType, t)))
-        }
+        _ => ignore(addVarToEnv(self, x, xName, Type::Fun(argsType, t)))
       }
       // ignore(addFuncToEnv(self, x, xName, Type::Fun(argsType, t)))
       // for item in self.signTable {
@@ -339,12 +328,9 @@ pub fn KnfEnv::to_knf(self : KnfEnv, s : @types.Syntax) -> Knf {
       for items in yts {
         //println(items.0 + " " + items.1.to_string())
         match items.1 {
-          Type::Fun(_,_) => {
+          Type::Fun(_, _) =>
             ignore(addFuncToEnv(newEnv, items.0, ytsName[index].0, items.1))
-          }
-          _ => {
-            ignore(addVarToEnv(newEnv, items.0, ytsName[index].0, items.1))
-          }
+          _ => ignore(addVarToEnv(newEnv, items.0, ytsName[index].0, items.1))
         }
         // ignore(addVarToEnv(newEnv, items.0, ytsName[index].0, items.1))
         index = index + 1
@@ -363,7 +349,7 @@ pub fn KnfEnv::to_knf(self : KnfEnv, s : @types.Syntax) -> Knf {
         )
       }
     }
-    App(Var(f), e2s) => {
+    App(Var(f), e2s) =>
       // println("APP NAME: " + f + " " + "args: " + e2s.to_string())
       if self.externals.find(f) != None {
         // println(f)
@@ -443,10 +429,10 @@ pub fn KnfEnv::to_knf(self : KnfEnv, s : @types.Syntax) -> Knf {
             }
             println(f)
             println("Type not found4")
-            abort("Not a function")}
+            abort("Not a function")
+          }
         }
       }
-    }
     App(e1, e2s) => {
       let e1Knf = to_knf(self, e1)
       // println("APP: " + e1.to_string() + " " + e2s.to_string())
@@ -488,7 +474,7 @@ pub fn KnfEnv::to_knf(self : KnfEnv, s : @types.Syntax) -> Knf {
               bind(xs)
             },
           )
-        _ =>{
+        _ => {
           // println("Wrong type") 
           println("Type not found2")
           abort("Not a function")
@@ -619,32 +605,40 @@ pub fn KnfEnv::to_knf(self : KnfEnv, s : @types.Syntax) -> Knf {
       )
     }
     Prim(a, b, op, kind=k) =>
-      if op == @types.Op::Add && (k == Some(@types.Kind::Int)) {
+      if op == @types.Op::Add && k == Some(@types.Kind::Int) {
         let ka = to_knf(self, a)
         let kb = to_knf(self, b)
         // println(a)
         // println(b)
-        if (get_knf_type(self, ka) == Type::Double) {
+        if get_knf_type(self, ka) == Type::Double {
           insert_let(
             self,
             ka,
             Type::Double,
             fn(x : Name) -> Knf {
-              insert_let(self, kb, Type::Int, fn(y : Name) -> Knf { FAdd(x, y) })
+              insert_let(
+                self,
+                kb,
+                Type::Int,
+                fn(y : Name) -> Knf { FAdd(x, y) },
+              )
             },
           )
-        }
-        else if (get_knf_type(self, kb) == Type::Double) {
+        } else if get_knf_type(self, kb) == Type::Double {
           insert_let(
             self,
             ka,
             Type::Int,
             fn(x : Name) -> Knf {
-              insert_let(self, kb, Type::Double, fn(y : Name) -> Knf { FAdd(x, y) })
+              insert_let(
+                self,
+                kb,
+                Type::Double,
+                fn(y : Name) -> Knf { FAdd(x, y) },
+              )
             },
           )
-        }
-        else {
+        } else {
           insert_let(
             self,
             ka,
@@ -673,27 +667,35 @@ pub fn KnfEnv::to_knf(self : KnfEnv, s : @types.Syntax) -> Knf {
       } else if op == @types.Op::Sub && k == Some(@types.Kind::Int) {
         let ka = to_knf(self, a)
         let kb = to_knf(self, b)
-        if (get_knf_type(self, ka) == Type::Double) {
+        if get_knf_type(self, ka) == Type::Double {
           insert_let(
             self,
             ka,
             Type::Double,
             fn(x : Name) -> Knf {
-              insert_let(self, kb, Type::Int, fn(y : Name) -> Knf { FSub(x, y) })
+              insert_let(
+                self,
+                kb,
+                Type::Int,
+                fn(y : Name) -> Knf { FSub(x, y) },
+              )
             },
           )
-        }
-        else if (get_knf_type(self, kb) == Type::Double) {
+        } else if get_knf_type(self, kb) == Type::Double {
           insert_let(
             self,
             ka,
             Type::Int,
             fn(x : Name) -> Knf {
-              insert_let(self, kb, Type::Double, fn(y : Name) -> Knf { FSub(x, y) })
+              insert_let(
+                self,
+                kb,
+                Type::Double,
+                fn(y : Name) -> Knf { FSub(x, y) },
+              )
             },
           )
-        }
-        else {
+        } else {
           insert_let(
             self,
             ka,
@@ -717,27 +719,35 @@ pub fn KnfEnv::to_knf(self : KnfEnv, s : @types.Syntax) -> Knf {
       } else if op == @types.Op::Mul && k == Some(@types.Kind::Int) {
         let ka = to_knf(self, a)
         let kb = to_knf(self, b)
-        if (get_knf_type(self, ka) == Type::Double) {
+        if get_knf_type(self, ka) == Type::Double {
           insert_let(
             self,
             ka,
             Type::Double,
             fn(x : Name) -> Knf {
-              insert_let(self, kb, Type::Int, fn(y : Name) -> Knf { FMul(x, y) })
+              insert_let(
+                self,
+                kb,
+                Type::Int,
+                fn(y : Name) -> Knf { FMul(x, y) },
+              )
             },
           )
-        }
-        else if (get_knf_type(self, kb) == Type::Double) {
+        } else if get_knf_type(self, kb) == Type::Double {
           insert_let(
             self,
             ka,
             Type::Int,
             fn(x : Name) -> Knf {
-              insert_let(self, kb, Type::Double, fn(y : Name) -> Knf { FMul(x, y) })
+              insert_let(
+                self,
+                kb,
+                Type::Double,
+                fn(y : Name) -> Knf { FMul(x, y) },
+              )
             },
           )
-        }
-        else {
+        } else {
           insert_let(
             self,
             ka,
@@ -761,27 +771,35 @@ pub fn KnfEnv::to_knf(self : KnfEnv, s : @types.Syntax) -> Knf {
       } else if op == @types.Op::Div && k == Some(@types.Kind::Int) {
         let ka = to_knf(self, a)
         let kb = to_knf(self, b)
-        if (get_knf_type(self, ka) == Type::Double) {
+        if get_knf_type(self, ka) == Type::Double {
           insert_let(
             self,
             ka,
             Type::Double,
             fn(x : Name) -> Knf {
-              insert_let(self, kb, Type::Int, fn(y : Name) -> Knf { FDiv(x, y) })
+              insert_let(
+                self,
+                kb,
+                Type::Int,
+                fn(y : Name) -> Knf { FDiv(x, y) },
+              )
             },
           )
-        }
-        else if (get_knf_type(self, kb) == Type::Double) {
+        } else if get_knf_type(self, kb) == Type::Double {
           insert_let(
             self,
             ka,
             Type::Int,
             fn(x : Name) -> Knf {
-              insert_let(self, kb, Type::Double, fn(y : Name) -> Knf { FDiv(x, y) })
+              insert_let(
+                self,
+                kb,
+                Type::Double,
+                fn(y : Name) -> Knf { FDiv(x, y) },
+              )
             },
           )
-        }
-        else {
+        } else {
           insert_let(
             self,
             ka,
