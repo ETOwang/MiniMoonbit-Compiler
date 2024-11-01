@@ -45,11 +45,9 @@
 // } derive(Show)
 
 pub fn parse(source_code : String) -> @types.Syntax {
-  println(source_code)
   let context : @lex.Context = { str: source_code, offset: 0, array: [] }
   @lex.lex(context)
   let var = prog(context)
-  println("var: \{var}")
   var
 }
 
@@ -326,7 +324,6 @@ fn nontop_param(
 // | expr_stmt
 // | if_expr;
 fn stmt(rest : ArrayView[@lex.Token]) -> (@types.Syntax, ArrayView[@lex.Token]) {
-  println("rest \{rest[0]}")
   match rest[0] {
     @lex.Let =>
       match rest[1] {
@@ -337,7 +334,6 @@ fn stmt(rest : ArrayView[@lex.Token]) -> (@types.Syntax, ArrayView[@lex.Token]) 
     @lex.If => if_expr(rest)
     _ => {
       let (_, tmp_rest) = get_expr(rest)
-      println("rest tk \{tmp_rest[0]}")
       if checkToken(tmp_rest, @lex.Assign) {
         assign_stmt(rest)
       } else {
