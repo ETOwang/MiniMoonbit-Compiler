@@ -89,10 +89,10 @@ pub fn KnfEnv::init_env_from_existing(env : KnfEnv) -> KnfEnv {
   {
     counter: env.counter + 1,
     externals: env.externals,
-    signTable: env.signTable,
-    funcTable: env.funcTable,
-    func_name_and_type: env.func_name_and_type,
-    name_and_type: env.name_and_type,
+    signTable: @hashmap.T::new(),
+    funcTable: @hashmap.T::new(),
+    func_name_and_type: @hashmap.T::new(),
+    name_and_type: @hashmap.T::new()
   }
 }
 
@@ -174,7 +174,7 @@ pub fn get_knf_type(self : KnfEnv, knf : Knf) -> Type {
     }
     Knf::LetTuple(_, _, body) => get_knf_type(self, body) // 假设 LetTuple 返回 body 的类型
     Knf::Get(array, _) => getTypeFromName(self, array) // 假设 Get 返回 Int 类型
-    Knf::Put(_, _, e3) => getTypeFromName(self, e3) // 假设 Put 返回 Unit 类型
+    Knf::Put(_, e2, e3) => getTypeFromName(self, e3) // 假设 Put 返回 Unit 类型
     Knf::ExternalArray(_) => Type::Array(Type::Int)
     Knf::ExternalFunctionApplication(_, _) => Type::Unit
     // 可以添加更多变体的处理...
@@ -318,13 +318,26 @@ pub fn KnfEnv::to_knf(self : KnfEnv, s : @types.Syntax) -> Knf {
       // for item in self.signTable {
       //   println(item.0)
       // }
+      let newEnv = init_env_from_existing(self)
+      for item in self.signTable {
+        newEnv.signTable[item.0] = item.1
+      }
+      for item in self.funcTable {
+        newEnv.funcTable[item.0] = item.1
+      }
+      for item in self.func_name_and_type {
+        newEnv.func_name_and_type[item.0] = item.1
+      }
+      for item in self.name_and_type {
+        newEnv.name_and_type[item.0] = item.1
+      }
+      let mut index = 0
+      self.counter += 200
       let ytsName = []
       for item in yts {
-        let yName = new_temp(self)
+        let yName = new_temp(newEnv)
         ytsName.push((yName, item.1))
       }
-      let newEnv = init_env_from_existing(self)
-      let mut index = 0
       for items in yts {
         //println(items.0 + " " + items.1.to_string())
         match items.1 {
