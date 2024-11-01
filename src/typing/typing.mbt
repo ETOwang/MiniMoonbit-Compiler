@@ -54,6 +54,7 @@ fn check_occur(tvar : @types.Type, ty : @types.Type) -> Unit!TyErr {
 }
 
 // 定义 occur_check 函数，用于检查类型变量是否在类型中出现
+//check ty in tvar
 fn occur_check(tvar : @types.Type, ty : @types.Type) -> Bool {
   //TODO
   false
@@ -151,7 +152,7 @@ fn infer(ctx : LocalCtx, e : @types.Syntax) -> @types.Type!TyErr {
 
     //一元负号推导
     Neg(expr, ~kind) as tvar => {
-      let ty = infer!(ctx, expr) // 推断表达式类型
+      let ty = repr(infer!(ctx, expr)) // 推断表达式类型
       match kind {
         Some(Int) => {
           unify!(ty, Int)
@@ -195,8 +196,8 @@ fn infer(ctx : LocalCtx, e : @types.Syntax) -> @types.Type!TyErr {
     }
     //二元算术推导
     Prim(lhs, rhs, _, ~kind) as tvar => {
-      let lhs_ty = infer!(ctx, lhs)
-      let rhs_ty = infer!(ctx, rhs)
+      let lhs_ty = repr(infer!(ctx, lhs))
+      let rhs_ty = repr(infer!(ctx, rhs))
       match kind {
         Some(Int) => {
           unify!(lhs_ty, Int)
@@ -281,8 +282,8 @@ fn infer(ctx : LocalCtx, e : @types.Syntax) -> @types.Type!TyErr {
       Tuple(types)
     }
     Get(vector, subscript) => {
-      let vector_ty = infer!(ctx, vector)
-      let subscript_ty = infer!(ctx, subscript)
+      let vector_ty = repr(infer!(ctx, vector))
+      let subscript_ty = repr(infer!(ctx, subscript))
       match vector_ty {
         Array(t) => {
           unify!(subscript_ty, Int)
@@ -313,7 +314,7 @@ fn infer(ctx : LocalCtx, e : @types.Syntax) -> @types.Type!TyErr {
       }
     }
     LetTuple(types, tuple_expr, rest) => {
-      let tuple_ty = infer!(ctx, tuple_expr)
+      let tuple_ty = repr(infer!(ctx, tuple_expr))
       unify!(tuple_ty, Tuple(types.map(fn { (_, t) => t })))
       let mut env_with_params = ctx
       for index = 0; index < types.length(); index = index + 1 {
