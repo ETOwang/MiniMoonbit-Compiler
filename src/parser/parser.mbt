@@ -336,7 +336,6 @@ fn stmt(rest : ArrayView[@lex.Token]) -> (@types.Syntax, ArrayView[@lex.Token]) 
     @lex.If => if_expr(rest)
     _ => {
       let (_, tmp_rest) = get_expr(rest)
-      println("rest tk \{tmp_rest[0]}")
       let (_, tmp_rest) = get_expr(rest)
       if checkToken(tmp_rest, @lex.Assign) {
         assign_stmt(rest)
