@@ -45,9 +45,11 @@
 // } derive(Show)
 
 pub fn parse(source_code : String) -> @types.Syntax {
+  // println(source_code)
   let context : @lex.Context = { str: source_code, offset: 0, array: [] }
   @lex.lex(context)
   let var = prog(context)
+  // println("var: \{var}")
   var
 }
 
@@ -333,6 +335,8 @@ fn stmt(rest : ArrayView[@lex.Token]) -> (@types.Syntax, ArrayView[@lex.Token]) 
     @lex.Fn => fn_decl_stmt(rest)
     @lex.If => if_expr(rest)
     _ => {
+      let (_, tmp_rest) = get_expr(rest)
+      println("rest tk \{tmp_rest[0]}")
       let (_, tmp_rest) = get_expr(rest)
       if checkToken(tmp_rest, @lex.Assign) {
         assign_stmt(rest)
@@ -622,7 +626,6 @@ fn get_or_apply_level_expr(
         rest = new_rest
         rest = skip(rest, @lex.Rbracket) // ']'
         syn = @types.Syntax::Get(syn, exp_syn)
-        println("Get syn: \{syn}, exp_syn : \{exp_syn}")
         continue
       }
       @lex.Lparen => { // get_or_apply_level_expr '(' (expr (',' expr)*)? ')'
@@ -664,7 +667,6 @@ fn get_or_apply_level_expr(
 fn value_expr(
   rest : ArrayView[@lex.Token]
 ) -> (@types.Syntax, ArrayView[@lex.Token]) {
-  println("rest \{rest[0]}")
   match rest[0] { //对应上方规则，判断是哪一种value_expr
     @lex.Lparen =>
       match rest[1] {
