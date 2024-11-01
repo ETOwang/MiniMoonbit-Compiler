@@ -45,11 +45,11 @@
 // } derive(Show)
 
 pub fn parse(source_code : String) -> @types.Syntax {
-  println(source_code)
+  // println(source_code)
   let context : @lex.Context = { str: source_code, offset: 0, array: [] }
   @lex.lex(context)
   let var = prog(context)
-  println("var: \{var}")
+  // println("var: \{var}")
   var
 }
 
