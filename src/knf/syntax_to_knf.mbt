@@ -67,7 +67,6 @@ pub fn getTypeFromName(env : KnfEnv, n : Name) -> Type {
   }
 }
 
-
 pub fn KnfEnv::new(externals : @immut/hashmap.T[String, Type]) -> KnfEnv {
   {
     counter: 1,
