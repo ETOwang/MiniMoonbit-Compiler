@@ -170,8 +170,9 @@ fn main {
   let closure_interpreter = Ref::new(false)
   let out_file = Ref::new("-")
   let print = Ref::new([])
-
+  let js_mode = Ref::new(false)
   // 
+  println(argv)
   @ArgParser.parse(
     [
       (
@@ -218,6 +219,12 @@ fn main {
         @ArgParser.String(fn(s) { out_file.val = s }),
         "Output file",
       ),
+      (
+        "--js",
+        "",
+        @ArgParser.Set(js_mode),
+        "Generate Js code",
+      ),
       ("--json", "", @ArgParser.Set(json), "Print results as JSON"),
 
       // Regular directives
@@ -255,6 +262,7 @@ fn main {
         ),
         "Inline threshold for KNF optimization",
       ),
+      
     ],
     fn(s) {
       if file.is_empty().not() {
@@ -272,6 +280,10 @@ fn main {
   }
   if closure_interpreter.val {
     end_stage.val = Stages::Closure
+  }
+  if js_mode.val {
+    start_stage.val = Stages::Parse
+    end_stage.val = Stages::Js
   }
   let stages_to_print = print.val.map(
     fn(s) {
