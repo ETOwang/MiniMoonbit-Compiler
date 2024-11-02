@@ -11,7 +11,7 @@ fn PrettyKnf::print_one_level(
   logger : @util.IndentLogger,
   val : Knf
 ) -> Unit {
-  match val {
+  match val { 
     Unit => logger.write_string("Unit")
     Int(i) => logger.write_string("Int(\{i})")
     Double(d) => logger.write_string("Double(\{d})")

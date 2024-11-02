@@ -54,34 +54,10 @@ fn check_occur(tvar : @types.Type, ty : @types.Type) -> Unit!TyErr {
 }
 
 // 定义 occur_check 函数，用于检查类型变量是否在类型中出现
+//check ty in tvar
 fn occur_check(tvar : @types.Type, ty : @types.Type) -> Bool {
-  match ty {
-    Var(ref_type) =>
-      match ref_type.val {
-        Some(inner_ty) => occur_check(tvar, inner_ty)
-        None =>
-          match tvar {
-            Var(temp) =>
-              match temp.val {
-                None => true
-                _ => false
-              }
-            _ => false
-          }
-      }
-    Fun(_, ret) => occur_check(tvar, ret)
-    // TODO:元组类型处理
-    Tuple(types) =>
-      for t in types {
-        if occur_check(tvar, t) {
-          break true
-        }
-      } else {
-        false
-      }
-    Array(inner_ty) => occur_check(tvar, inner_ty)
-    _ => false
-  }
+  //TODO
+  false
 }
 
 //归一化
@@ -176,7 +152,7 @@ fn infer(ctx : LocalCtx, e : @types.Syntax) -> @types.Type!TyErr {
 
     //一元负号推导
     Neg(expr, ~kind) as tvar => {
-      let ty = infer!(ctx, expr) // 推断表达式类型
+      let ty = repr(infer!(ctx, expr)) // 推断表达式类型
       match kind {
         Some(Int) => {
           unify!(ty, Int)
@@ -220,8 +196,8 @@ fn infer(ctx : LocalCtx, e : @types.Syntax) -> @types.Type!TyErr {
     }
     //二元算术推导
     Prim(lhs, rhs, _, ~kind) as tvar => {
-      let lhs_ty = infer!(ctx, lhs)
-      let rhs_ty = infer!(ctx, rhs)
+      let lhs_ty = repr(infer!(ctx, lhs))
+      let rhs_ty = repr(infer!(ctx, rhs))
       match kind {
         Some(Int) => {
           unify!(lhs_ty, Int)
@@ -306,8 +282,8 @@ fn infer(ctx : LocalCtx, e : @types.Syntax) -> @types.Type!TyErr {
       Tuple(types)
     }
     Get(vector, subscript) => {
-      let vector_ty = infer!(ctx, vector)
-      let subscript_ty = infer!(ctx, subscript)
+      let vector_ty = repr(infer!(ctx, vector))
+      let subscript_ty = repr(infer!(ctx, subscript))
       match vector_ty {
         Array(t) => {
           unify!(subscript_ty, Int)
@@ -338,7 +314,7 @@ fn infer(ctx : LocalCtx, e : @types.Syntax) -> @types.Type!TyErr {
       }
     }
     LetTuple(types, tuple_expr, rest) => {
-      let tuple_ty = infer!(ctx, tuple_expr)
+      let tuple_ty = repr(infer!(ctx, tuple_expr))
       unify!(tuple_ty, Tuple(types.map(fn { (_, t) => t })))
       let mut env_with_params = ctx
       for index = 0; index < types.length(); index = index + 1 {
