@@ -181,7 +181,6 @@ fn main {
   let print = Ref::new([])
   let js_mode = Ref::new(false)
   // 
-  println(argv)
   @ArgParser.parse(
     [
       (
