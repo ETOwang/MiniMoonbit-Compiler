@@ -51,10 +51,6 @@ pub fn remove(element: Name, arr: Array[Name]) -> Array[Name] {
     arr.filter(|e| e != element)
 }
 
-
-
-
-
 pub fn prepend_array(arr : Array[Name], element : Name) -> Array[Name] {
   [element] + arr
 }
@@ -63,16 +59,9 @@ pub fn diff(arr1: Array[Name], arr2: Array[Name]) -> Array[Name] {
     arr1.filter(|e| !arr2.contains(e))
 }
 
-
-
-
-
 pub fn map(arr: Array[(Name, Type)], f: fn((Name, Type)) -> Name) -> Array[Name] {
     arr.map(|x| f(x))
 }
-
-
-
 
 pub fn knf_program_to_closure(
     prog: @knf.KNF,
