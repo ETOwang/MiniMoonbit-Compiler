@@ -108,7 +108,8 @@ pub fn knf_program_to_closure(
         extern_env[arg.0.to_string()] = arg.1
       }
       extern_env[f.name.to_string()] = f.ty
-      let body = knf_program_to_closure(f.body, extern_env).body
+      let body_program = knf_program_to_closure(f.body, extern_env)
+      let body = body_program.body
       let mut free_vars = fv(f.body)
       for arg in f.args {
         free_vars = remove(arg.0, free_vars)
@@ -142,6 +143,9 @@ pub fn knf_program_to_closure(
       // 返回新的程序，包含闭包
       let fundefs = knf_program_to_closure(rest, extern_env).fundefs
       fundefs.push(func_def)
+      for fundef in body_program.fundefs {
+        fundefs.push(fundef)
+      }
       {
         fundefs, // 返回函数定义
         body: closure,
