@@ -356,11 +356,10 @@ fn main {
   } else if js_mode.val {
     let js_code = status.js_code
     if out_file.val == "-" {
-      println(js_code)
+      println(js_code.unwrap())
     } else {
-      @fs.write_to_string(out_file.val, js_code)
+      @fs.write_to_string(out_file.val, js_code.unwrap())
     }
-    @fs.write_to_string(out_file.val, js_code)
   } else {
     let out_string = status.output(json.val)
     if out_file.val == "-" {
