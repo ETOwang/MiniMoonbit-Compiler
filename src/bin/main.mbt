@@ -353,6 +353,14 @@ fn main {
         @util.die("Closure interpreter error")
       }
     }
+  } else if js_mode.val {
+    let js_code = status.js_code
+    if out_file.val == "-" {
+      println(js_code)
+    } else {
+      @fs.write_to_string(out_file.val, js_code)
+    }
+    @fs.write_to_string(out_file.val, js_code)
   } else {
     let out_string = status.output(json.val)
     if out_file.val == "-" {
@@ -361,4 +369,5 @@ fn main {
       @fs.write_to_string(out_file.val, out_string)
     }
   }
+  
 }
