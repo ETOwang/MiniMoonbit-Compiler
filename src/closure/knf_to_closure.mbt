@@ -93,6 +93,7 @@ pub fn knf_program_to_closure(
       { fundefs: [], body: IfLe(x, y, e1_closure, e2_closure) }
     }
     Let((x, t), e1, e2) => {
+      extern_env[x.to_string()] = t
       let e1_closure = knf_program_to_closure(e1, extern_env).body
       let e2_closure = knf_program_to_closure(e2, extern_env).body
       {
