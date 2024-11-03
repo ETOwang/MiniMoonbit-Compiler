@@ -108,7 +108,10 @@ pub fn knf_program_to_closure(
       }
       extern_env[f.name.to_string()] = f.ty
       let body = knf_program_to_closure(f.body, extern_env).body
-      let free_vars = fv(f.body)
+      let mut free_vars = fv(f.body)
+      for arg in f.args {
+        free_vars = remove(arg.0, free_vars)
+      }
       let fvs = free_vars.map(
         fn(x) {
           match extern_env.get(x.to_string()) {
