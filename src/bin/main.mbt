@@ -6,8 +6,8 @@ enum Stages {
   KnfOpt
   Closure
   Asm
-  Finished
   Js
+  Finished
 } derive(Show, Eq, Compare)
 
 fn Stages::from_string(s : String) -> Stages? {
@@ -318,7 +318,6 @@ fn main {
       @util.die("Initialization error")
     }
   }
-
   // Run stages
   while true {
     let stg = status.curr_stage
