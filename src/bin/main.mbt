@@ -221,7 +221,7 @@ fn main {
       ),
       (
         "--js",
-        "",
+        "-o",
         @ArgParser.Set(js_mode),
         "Generate Js code",
       ),
