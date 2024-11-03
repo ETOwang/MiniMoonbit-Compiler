@@ -103,19 +103,23 @@ pub fn knf_program_to_closure(
     Var(x) => { fundefs: [], body: Var(x) }
     // 处理递归定义
     LetRec(f, rest) => {
+      for arg in f.args {
+        extern_env[arg.0.to_string()] = arg.1
+      }
+      extern_env[f.name.to_string()] = f.ty
       let body = knf_program_to_closure(f.body, extern_env).body
       let free_vars = fv(f.body)
       let fvs = free_vars.map(
         fn(x) {
           match extern_env.get(x.to_string()) {
             Some(ty) => (x, type_to_lowtype(ty))
-            None => @util.die("Type not found in extern_env")
+            None => @util.die(x.to_string() + " not found in extern_env")
           }
         },
       )
       // 创建函数定义
       let func_def = {
-        name: f.name.name.unwrap(),
+        name: f.name.to_string(),
         old_name: f.name, // 旧名称与新名称相同
         is_closure: true,
         ty: type_to_lowtype(f.ty),
@@ -124,7 +128,6 @@ pub fn knf_program_to_closure(
         formal_free_vars: fvs,
         body,
       }
-      extern_env[func_def.name.to_string()] = f.ty
       let cls = { name: func_def.name, actual_free_vars: free_vars }
       // 创建闭包
       let closure = MakeClosure(
@@ -144,7 +147,7 @@ pub fn knf_program_to_closure(
     Tuple(xs) => { fundefs: [], body: MakeTuple(xs) }
     LetTuple(xts, y, e) => {
       for xt in xts {
-        extern_env[xt.0.name.unwrap()] = xt.1
+        extern_env[xt.0.to_string()] = xt.1
       }
       let e_closure = knf_program_to_closure(e, extern_env).body
       {
@@ -158,7 +161,7 @@ pub fn knf_program_to_closure(
     }
     Get(x, y) => { fundefs: [], body: ArrayGet(x, y) }
     Put(x, y, z) => { fundefs: [], body: ArrayPut(x, y, z) }
-    ExternalArray(x) => { fundefs: [], body: ExternalArray(x.name.unwrap()) }
+    ExternalArray(x) => { fundefs: [], body: ExternalArray(x.to_string()) }
     ExternalFunctionApplication(name, xs) =>
       { fundefs: [], body: CallDirect(name, xs) }
   }
@@ -173,6 +176,12 @@ pub fn type_to_lowtype(ty : Type) -> LowType {
     Type::Double => LowType::Double
     Type::Tuple(tys) => LowType::Tuple(tys.map(type_to_lowtype))
     Type::Array(ty) => LowType::Array(type_to_lowtype(ty))
-    _ => @util.die("type_to_lowtype: not implemented")
+    Type::Ptr => LowType::Ptr
+    Type::Fun(args, ty) => {
+      let args_lowtype = args.map(type_to_lowtype)
+      let ret_lowtype = type_to_lowtype(ty)
+      LowType::ClosureFn(args_lowtype, ret_lowtype)
+    }
+    _ => @util.die(ty.to_string())
   }
 }
