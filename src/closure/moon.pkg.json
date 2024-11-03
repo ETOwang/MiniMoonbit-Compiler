@@ -6,5 +6,10 @@
     },
     "moonbitlang/minimbt/knf",
     "moonbitlang/minimbt/util"
+  ],
+  "test-import": [
+    "moonbitlang/x/fs",
+    "moonbitlang/minimbt/parser",
+    "moonbitlang/minimbt/typing"
   ]
 }
