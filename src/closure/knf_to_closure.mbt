@@ -134,6 +134,7 @@ pub fn knf_program_to_closure(
       for arg in f.args {
         free_vars = remove(arg.0, free_vars)
       }
+      free_vars = remove(f.name, free_vars)
       let fvs = free_vars.map(
         fn(x) {
           match extern_env.get(x.to_string()) {
