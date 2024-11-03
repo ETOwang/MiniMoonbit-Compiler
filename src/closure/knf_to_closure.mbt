@@ -60,6 +60,14 @@ pub fn union(arr1 : Array[Name], arr2 : Array[Name]) -> Array[Name] {
   add_to_array(arr1, arr2)
 }
 
+pub fn unite(arr1 : Array[FuncDef], arr2 : Array[FuncDef]) -> Array[FuncDef] {
+  //TODO:引用传递
+  for elem in arr2 {
+    arr1.push(elem)
+  }
+  arr1
+}
+
 pub fn remove(element : Name, arr : Array[Name]) -> Array[Name] {
   arr.filter(fn(e) { e != element })
 }
@@ -83,21 +91,33 @@ pub fn knf_program_to_closure(
     FMul(x, y) => { fundefs: [], body: FMul(x, y) }
     FDiv(x, y) => { fundefs: [], body: FDiv(x, y) }
     IfEq(x, y, e1, e2) => {
-      let e1_closure = knf_program_to_closure(e1, extern_env).body
-      let e2_closure = knf_program_to_closure(e2, extern_env).body
-      { fundefs: [], body: IfEq(x, y, e1_closure, e2_closure) }
+      let e1_program = knf_program_to_closure(e1, extern_env)
+      let e1_closure = e1_program.body
+      let e2_program = knf_program_to_closure(e2, extern_env)
+      let e2_closure = e2_program.body
+      {
+        fundefs: unite(e1_program.fundefs, e2_program.fundefs),
+        body: IfEq(x, y, e1_closure, e2_closure),
+      }
     }
     IfLe(x, y, e1, e2) => {
-      let e1_closure = knf_program_to_closure(e1, extern_env).body
-      let e2_closure = knf_program_to_closure(e2, extern_env).body
-      { fundefs: [], body: IfLe(x, y, e1_closure, e2_closure) }
+      let e1_program = knf_program_to_closure(e1, extern_env)
+      let e1_closure = e1_program.body
+      let e2_program = knf_program_to_closure(e2, extern_env)
+      let e2_closure = e2_program.body
+      {
+        fundefs: unite(e1_program.fundefs, e2_program.fundefs),
+        body: IfLe(x, y, e1_closure, e2_closure),
+      }
     }
     Let((x, t), e1, e2) => {
       extern_env[x.to_string()] = t
-      let e1_closure = knf_program_to_closure(e1, extern_env).body
-      let e2_closure = knf_program_to_closure(e2, extern_env).body
+      let e1_program = knf_program_to_closure(e1, extern_env)
+      let e1_closure = e1_program.body
+      let e2_program = knf_program_to_closure(e2, extern_env)
+      let e2_closure = e2_program.body
       {
-        fundefs: [],
+        fundefs: unite(e1_program.fundefs, e2_program.fundefs),
         body: Let((x, type_to_lowtype(t)), e1_closure, e2_closure),
       }
     }
@@ -157,9 +177,10 @@ pub fn knf_program_to_closure(
       for xt in xts {
         extern_env[xt.0.to_string()] = xt.1
       }
-      let e_closure = knf_program_to_closure(e, extern_env).body
+      let e_programe = knf_program_to_closure(e, extern_env)
+      let e_closure = e_programe.body
       {
-        fundefs: [],
+        fundefs: e_programe.fundefs,
         body: LetTuple(
           xts.map(fn(x) { (x.0, type_to_lowtype(x.1)) }),
           y,
