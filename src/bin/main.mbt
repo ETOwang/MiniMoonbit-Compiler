@@ -130,7 +130,7 @@ fn CompileStatus::step(self : CompileStatus, js_mode: Bool) -> Bool {
       self.asm = Some(real_asm)
     }
     Js => {
-      let code = @js.jscodegen(self.ast.unwrap())
+      let code = @js.generator(self.ast.unwrap())
       self.js_code = Some(code)
     }
     Finished => ()
