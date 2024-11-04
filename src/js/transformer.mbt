@@ -113,13 +113,25 @@ fn jscodegen(ast: @types.Syntax) -> String {
       jscodegen_fundef(fundef) + "\n" + jscodegen(rest)
     }
     @types.Syntax::LetTuple(arr, value, rest) => {
-      let mut result = arr[0].0
+      let mut count = 0
+      let mut result = genVarName(arr[0].0, count)
+      count = 1
       for arg in arr[1:] {
-        result = result + "," + arg.0
+        result = result + ", " + genVarName(arg.0, count)
+        count = count + 1
       }
       "let [" + result + "] = " + jscodegen(value) + "\n" + jscodegen(rest)
     }
     @types.Syntax::Put(array, value, rest) => jscodegen(array) + " = " + jscodegen(value) + ";\n" + jscodegen(rest)
+  }
+}
+
+fn genVarName(name: String, n: Int) -> String {
+  if name == "_" {
+    "tempvar" + n.to_string()
+  }
+  else {
+    name
   }
 }
 

@@ -1,5 +1,5 @@
 test {
-  let input = @fs.read_file_to_string!(path="test/test_src/cls-bug2.mbt")
+  let input = @fs.read_file_to_string!(path="test/test_src/inprod.mbt")
   let tokens = []
   let context : @lex.Context = { str: input, offset: 0, array: tokens }
   @lex.lex(context)
