@@ -84,7 +84,14 @@ fn jscodegen(ast: @types.Syntax) -> String {
     @types.Syntax::Array(size, init) => "Array(" + jscodegen(size) + ").fill(" + jscodegen(init) + ")"
     @types.Syntax::Neg(expr) => "-" + jscodegen(expr)
     @types.Syntax::App(func, args) => {
-      jscodegen(func) + "(" + args.map(jscodegen).join(", ") + ")"
+      let mut result = jscodegen(func) + "("
+      if not(args.is_empty()) {
+        result = result + jscodegen(args[0])
+        for arg in args[1:] {
+          result = result + ", " + jscodegen(arg)
+        }
+      }
+      result + ")"
     }
     @types.Syntax::Get(array, index) => jscodegen(array) + "[" + jscodegen(index) + "]"
     @types.Syntax::If(cond, then_branch, else_branch) => "if (" + jscodegen(cond) + ") { \n"  + jscodegen(then_branch) + ";\n" + "} else { \n" + jscodegen(else_branch) + ";\n" +  "}"
@@ -97,7 +104,7 @@ fn jscodegen(ast: @types.Syntax) -> String {
         "Div" => op = "/"
         _ => @util.die("wrong op")
       }
-      "(" + jscodegen(lhs) + " " + op + " " + jscodegen(rhs) + ")"
+      "(" + calcuPrim(lhs) + " " + op + " " + calcuPrim(rhs) + ")"
     }
     @types.Syntax::Eq(lhs, rhs) => jscodegen(lhs) + " === " + jscodegen(rhs)
     @types.Syntax::LE(lhs, rhs) => jscodegen(lhs) + " <= " + jscodegen(rhs)
@@ -151,6 +158,24 @@ fn jscodegen_with_return(ast: @types.Syntax) -> String {
     }
     @types.Syntax::Put(array, value, rest) => jscodegen(array) + " = " + jscodegen(value) + ";\n" + jscodegen_with_return(rest)
     @types.Syntax::If(cond, then_branch, else_branch) => "if (" + jscodegen(cond) + ") { \n"  + jscodegen_with_return(then_branch) + ";\n" + "} else { \n" + jscodegen_with_return(else_branch) + ";\n" +  "}"
-    _ => "return " + jscodegen(ast) + ";"
+    _ => "return " + jscodegen(ast) 
+  }
+}
+
+fn calcuPrim(ast: @types.Syntax) -> String {
+  match ast {
+    @types.Syntax::If(cond, then_branch, else_branch) => "(" + jscodegen(cond) + " ? " + jscodegen(then_branch) + " : " + jscodegen(else_branch) + ")"
+    @types.Syntax::Prim(lhs, rhs, op, ..) => {
+      let mut op = op.to_string()
+      match op {
+        "Add" => op = "+"
+        "Sub" => op = "-"
+        "Mul" => op = "*"
+        "Div" => op = "/"
+        _ => @util.die("wrong op")
+      }
+      "(" + calcuPrim(lhs) + " " + op + " " + calcuPrim(rhs) + ")"
+    }
+    _ => jscodegen(ast)
   }
 }

@@ -1,16 +1,15 @@
-function ack(x,y) {
-if (x <= 0) { 
-return (y + 1);;
+function f(n) {
+if (!0 <= n) { 
+return ;
 } else { 
-if (y <= 0) { 
-return ack((x - 1), 1);;
-} else { 
-return ack((x - 1), ack(x, (y - 1)));;
-};
+let t1 = minimbt_print_int(n)
+let a = Array(1).fill(f)
+let a0 = a[0]
+return a0((n - 1));
 }
 }
 function main() {
-minimbt_print_int(ack(3, 8));
+f(9);
 minimbt_print_endline();
 }
 
