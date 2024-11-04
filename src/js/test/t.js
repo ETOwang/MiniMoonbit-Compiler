@@ -1,5 +1,5 @@
 function f(n) {
-if (!0 <= n) { 
+if (!(0 <= n)) { 
 return ;
 } else { 
 let t1 = minimbt_print_int(n)

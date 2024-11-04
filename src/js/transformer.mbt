@@ -80,7 +80,7 @@ fn jscodegen(ast: @types.Syntax) -> String {
       }
       "[" + result + "]"
     }
-    @types.Syntax::Not(expr) => "!" + jscodegen(expr)
+    @types.Syntax::Not(expr) => "!" + "(" + jscodegen(expr) + ")"
     @types.Syntax::Array(size, init) => "Array(" + jscodegen(size) + ").fill(" + jscodegen(init) + ")"
     @types.Syntax::Neg(expr) => "-" + jscodegen(expr)
     @types.Syntax::App(func, args) => {
