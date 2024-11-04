@@ -7,6 +7,7 @@ enum Stages {
   Closure
   Asm
   Js
+  Wasm
   Finished
 } derive(Show, Eq, Compare)
 
@@ -19,13 +20,32 @@ fn Stages::from_string(s : String) -> Stages? {
     "knf-opt" => Some(Stages::KnfOpt)
     "closure" => Some(Stages::Closure)
     "riscv" => Some(Stages::Asm)
+    "wasm" => Some(Stages::Wasm)
     "finished" => Some(Stages::Finished)
     _ => None
   }
 }
 
-fn Stages::next(self : Stages, js_mode: Bool) -> Stages {
-  if not(js_mode) {
+fn Stages::next(self : Stages, js_mode: Bool, wasm_mode: Bool) -> Stages {
+  if js_mode {
+    match self {
+      Stages::Parse => Stages::Js
+      Stages::Js => Stages::Finished
+      Stages::Finished => Stages::Finished
+    }
+  }
+  else if wasm_mode {
+    match self {
+      Stages::Parse => Stages::Typecheck
+      Stages::Typecheck => Stages::Knf
+      Stages::Knf => Stages::KnfOpt
+      Stages::KnfOpt => Stages::Closure
+      Stages::Closure => Stages::Asm
+      Stages::Wasm => Stages::Finished
+      Stages::Finished => Stages::Finished
+    }
+  }
+  else {
     match self {
       Stages::Parse => Stages::Typecheck
       Stages::Typecheck => Stages::Knf
@@ -33,13 +53,6 @@ fn Stages::next(self : Stages, js_mode: Bool) -> Stages {
       Stages::KnfOpt => Stages::Closure
       Stages::Closure => Stages::Asm
       Stages::Asm => Stages::Finished
-      Stages::Finished => Stages::Finished
-    }
-  }
-  else {
-    match self {
-      Stages::Parse => Stages::Js
-      Stages::Js => Stages::Finished
       Stages::Finished => Stages::Finished
     }
   }
@@ -57,6 +70,7 @@ struct CompileStatus {
   mut closure_ir : @closure.Program?
   mut asm : Array[@riscv.AssemblyFunction]?
   mut js_code : String?
+  mut wasm : String?
 }
 
 fn CompileStatus::initialize(
@@ -76,6 +90,7 @@ fn CompileStatus::initialize(
     closure_ir: None,
     asm: None,
     js_code: None,
+    wasm: None
   }
   match start_stage {
     Parse => v.source_code = Some(file)
@@ -95,7 +110,7 @@ fn CompileStatus::initialize(
 }
 
 /// Run the next stage of compilation. Returns true if the compilation is finished.
-fn CompileStatus::step(self : CompileStatus, js_mode: Bool) -> Bool {
+fn CompileStatus::step(self : CompileStatus, js_mode: Bool, wasm_mode: Bool) -> Bool {
   if self.curr_stage >= self.end_stage {
     return true
   }
@@ -133,9 +148,13 @@ fn CompileStatus::step(self : CompileStatus, js_mode: Bool) -> Bool {
       let code = @js.generator(self.ast.unwrap())
       self.js_code = Some(code)
     }
+    Wasm => {
+      let wasm = @wasm.generator(self.closure_ir)
+      self.wasm = Some(wasm)
+    }
     Finished => ()
   }
-  self.curr_stage = self.curr_stage.next(js_mode)
+  self.curr_stage = self.curr_stage.next(js_mode, wasm_mode)
   self.curr_stage >= self.end_stage
 }
 
@@ -149,6 +168,7 @@ fn CompileStatus::output(self : CompileStatus, json : Bool) -> String {
       Closure => @json.stringify(self.opt_knf.unwrap().to_json())
       Asm => @util.die("TODO")
       Js => self.js_code.unwrap()
+      Wasm => self.wasm.unwrap()
       Finished => @riscv.print_functions(self.asm.unwrap())
     }
   } else {
@@ -160,6 +180,7 @@ fn CompileStatus::output(self : CompileStatus, json : Bool) -> String {
       Closure => self.opt_knf.unwrap().to_string()
       Asm => @util.die("TODO")
       Js => self.js_code.unwrap().to_string()
+      Wasm => self.wasm.unwrap().to_string()
       Finished => @riscv.print_functions(self.asm.unwrap())
     }
   }
@@ -180,6 +201,7 @@ fn main {
   let out_file = Ref::new("-")
   let print = Ref::new([])
   let js_mode = Ref::new(false)
+  let wasm_mode = Ref::new(false)
   // 
   @ArgParser.parse(
     [
@@ -232,6 +254,12 @@ fn main {
         "",
         @ArgParser.Set(js_mode),
         "Generate Js code",
+      ),
+      (
+        "--wasm",
+        "",
+        @ArgParser.Set(wasm_mode),
+        "Generate  wasm",
       ),
       ("--json", "", @ArgParser.Set(json), "Print results as JSON"),
 
@@ -292,6 +320,9 @@ fn main {
   if js_mode.val {
     end_stage.val = Stages::Js
   }
+  if wasm_mode.val {
+    end_stage.val = Stages::Wasm
+  }
   let stages_to_print = print.val.map(
     fn(s) {
       match Stages::from_string(s) {
@@ -311,7 +342,7 @@ fn main {
 
   // Compilation
   let status = match
-    CompileStatus::initialize?(start_stage.val, end_stage.val.next(js_mode.val), contents) {
+    CompileStatus::initialize?(start_stage.val, end_stage.val.next(js_mode.val, wasm_mode.val), contents) {
     Ok(status) => status
     Err(e) => {
       println(e)
@@ -321,7 +352,7 @@ fn main {
   // Run stages
   while true {
     let stg = status.curr_stage
-    let stop = status.step(js_mode.val)
+    let stop = status.step(js_mode.val, wasm_mode.val)
     if stages_to_print.contains(stg) {
       println("Stage: \{stg}")
       println(status.output(json.val))
@@ -358,6 +389,13 @@ fn main {
       println(js_code.unwrap())
     } else {
       @fs.write_to_string(out_file.val, js_code.unwrap())
+    }
+  } else if wasm_mode.val {
+    let wasm_code = status.wasm
+    if out_file.val == "-" {
+      println(wasm_code.unwrap())
+    } else {
+      @fs.write_to_string(out_file.val, wasm_code.unwrap())
     }
   } else {
     let out_string = status.output(json.val)
