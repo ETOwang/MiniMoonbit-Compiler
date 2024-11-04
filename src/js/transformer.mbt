@@ -38,9 +38,18 @@
 //   body : Syntax
 // } derive(Show)
 
+struct tmpvar {
+  mut count: Int
+} derive(Show)
+
+let t: tmpvar = tmpvar::{
+  count: 0
+}
+
 pub fn generator(ast: @types.Syntax) -> String {
   jscodegen(ast) + "\n" + "export default main;"
 }
+
 
 fn jscodegen(ast: @types.Syntax) -> String {
   match ast {
@@ -86,9 +95,9 @@ fn jscodegen(ast: @types.Syntax) -> String {
     @types.Syntax::App(func, args) => {
       let mut result = jscodegen(func) + "("
       if not(args.is_empty()) {
-        result = result + jscodegen(args[0])
+        result = result + calcuPrim(args[0])
         for arg in args[1:] {
-          result = result + ", " + jscodegen(arg)
+          result = result + ", " + calcuPrim(arg)
         }
       }
       result + ")"
@@ -108,17 +117,14 @@ fn jscodegen(ast: @types.Syntax) -> String {
     }
     @types.Syntax::Eq(lhs, rhs) => jscodegen(lhs) + " === " + jscodegen(rhs)
     @types.Syntax::LE(lhs, rhs) => jscodegen(lhs) + " <= " + jscodegen(rhs)
-    @types.Syntax::Let((name, _), value, rest) => "let " + name + " = " + jscodegen(value) + "\n" + jscodegen(rest)
+    @types.Syntax::Let((name, _), value, rest) => "let " + genVarName(name) + " = " + jscodegen(value) + "\n" + jscodegen(rest)
     @types.Syntax::LetRec(fundef, rest) => {
       jscodegen_fundef(fundef) + "\n" + jscodegen(rest)
     }
     @types.Syntax::LetTuple(arr, value, rest) => {
-      let mut count = 0
-      let mut result = genVarName(arr[0].0, count)
-      count = 1
+      let mut result = genVarName(arr[0].0)
       for arg in arr[1:] {
-        result = result + ", " + genVarName(arg.0, count)
-        count = count + 1
+        result = result + ", " + genVarName(arg.0)
       }
       "let [" + result + "] = " + jscodegen(value) + "\n" + jscodegen(rest)
     }
@@ -126,9 +132,10 @@ fn jscodegen(ast: @types.Syntax) -> String {
   }
 }
 
-fn genVarName(name: String, n: Int) -> String {
+fn genVarName(name: String) -> String {
   if name == "_" {
-    "tempvar" + n.to_string()
+    t.count = t.count + 1
+    "tempvar" + t.count.to_string()
   }
   else {
     name
@@ -157,14 +164,14 @@ fn jscodegen_fundef(fundef: @types.Fundef) -> String {
 
 fn jscodegen_with_return(ast: @types.Syntax) -> String {
   match ast {
-    @types.Syntax::Let((name, _), value, rest) => "let " + name + " = " + jscodegen(value) + "\n" + jscodegen_with_return(rest)
+    @types.Syntax::Let((name, _), value, rest) => "let " + genVarName(name) + " = " + jscodegen(value) + "\n" + jscodegen_with_return(rest)
     @types.Syntax::LetRec(fundef, rest) => {
       jscodegen_fundef(fundef) + "\n" + jscodegen_with_return(rest)
     }
     @types.Syntax::LetTuple(arr, value, rest) => {
-      let mut result = arr[0].0
+      let mut result = genVarName(arr[0].0)
       for arg in arr[1:] {
-        result = result + "," + arg.0
+        result = result + ", " + genVarName(arg.0)
       }
       "let [" + result + "] = " + jscodegen(value) + "\n" + jscodegen_with_return(rest)
     }
