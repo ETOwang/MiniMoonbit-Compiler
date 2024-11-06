@@ -40,7 +40,7 @@ fn Stages::next(self : Stages, js_mode: Bool, wasm_mode: Bool) -> Stages {
       Stages::Typecheck => Stages::Knf
       Stages::Knf => Stages::KnfOpt
       Stages::KnfOpt => Stages::Closure
-      Stages::Closure => Stages::Asm
+      Stages::Closure => Stages::Wasm
       Stages::Wasm => Stages::Finished
       Stages::Finished => Stages::Finished
     }
@@ -149,7 +149,7 @@ fn CompileStatus::step(self : CompileStatus, js_mode: Bool, wasm_mode: Bool) -> 
       self.js_code = Some(code)
     }
     Wasm => {
-      let wasm = @wasm.generator(self.closure_ir)
+      let wasm = @wasm.generator(self.closure_ir.unwrap())
       self.wasm = Some(wasm)
     }
     Finished => ()
