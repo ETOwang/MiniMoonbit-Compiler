@@ -113,7 +113,7 @@ fn CompileStatus::step(self : CompileStatus) -> Bool {
       self.closure_ir = Some(closure_ir)
     }
     Asm => {
-      let real_asm = @riscv.emit(@util.die("TODO"))
+      let real_asm = @riscv.emit()
       self.asm = Some(real_asm)
     }
     Finished => ()
