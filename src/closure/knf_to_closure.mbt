@@ -1,5 +1,7 @@
 pub typealias LocalEnv = @immut/hashmap.T[Name, LowType]
 
+let closure_table : @hashmap.T[String, Bool] = @hashmap.T::new()
+
 pub fn fv(expr : @knf.Knf) -> Array[Name] {
   match expr {
     Unit => []
@@ -74,7 +76,8 @@ pub fn remove(element : Name, arr : Array[Name]) -> Array[Name] {
 
 pub fn knf_program_to_closure(
   prog : @knf.Knf,
-  extern_env : Map[String, Type]
+  extern_env : Map[String, Type],
+  flag : Bool
 ) -> Program {
   match prog {
     Unit => { fundefs: [], body: Unit }
@@ -91,9 +94,9 @@ pub fn knf_program_to_closure(
     FMul(x, y) => { fundefs: [], body: FMul(x, y) }
     FDiv(x, y) => { fundefs: [], body: FDiv(x, y) }
     IfEq(x, y, e1, e2) => {
-      let e1_program = knf_program_to_closure(e1, extern_env)
+      let e1_program = knf_program_to_closure(e1, extern_env, flag)
       let e1_closure = e1_program.body
-      let e2_program = knf_program_to_closure(e2, extern_env)
+      let e2_program = knf_program_to_closure(e2, extern_env, flag)
       let e2_closure = e2_program.body
       {
         fundefs: unite(e1_program.fundefs, e2_program.fundefs),
@@ -101,9 +104,9 @@ pub fn knf_program_to_closure(
       }
     }
     IfLe(x, y, e1, e2) => {
-      let e1_program = knf_program_to_closure(e1, extern_env)
+      let e1_program = knf_program_to_closure(e1, extern_env, flag)
       let e1_closure = e1_program.body
-      let e2_program = knf_program_to_closure(e2, extern_env)
+      let e2_program = knf_program_to_closure(e2, extern_env, flag)
       let e2_closure = e2_program.body
       {
         fundefs: unite(e1_program.fundefs, e2_program.fundefs),
@@ -112,9 +115,9 @@ pub fn knf_program_to_closure(
     }
     Let((x, t), e1, e2) => {
       extern_env[x.to_string()] = t
-      let e1_program = knf_program_to_closure(e1, extern_env)
+      let e1_program = knf_program_to_closure(e1, extern_env, flag)
       let e1_closure = e1_program.body
-      let e2_program = knf_program_to_closure(e2, extern_env)
+      let e2_program = knf_program_to_closure(e2, extern_env, flag)
       let e2_closure = e2_program.body
       {
         fundefs: unite(e1_program.fundefs, e2_program.fundefs),
@@ -128,7 +131,8 @@ pub fn knf_program_to_closure(
         extern_env[arg.0.to_string()] = arg.1
       }
       extern_env[f.name.to_string()] = f.ty
-      let body_program = knf_program_to_closure(f.body, extern_env)
+      closure_table[f.name.to_string()] = flag
+      let body_program = knf_program_to_closure(f.body, extern_env, true)
       let body = body_program.body
       let mut free_vars = fv(f.body)
       for arg in f.args {
@@ -144,25 +148,36 @@ pub fn knf_program_to_closure(
         },
       )
       // 创建函数定义
-      let func_def = {
-        name: f.name.to_string(),
-        old_name: f.name, // 旧名称与新名称相同
-        is_closure: true,
-        ty: type_to_lowtype(f.ty),
-        args: f.args.map(fn(arg) { (arg.0, type_to_lowtype(arg.1)) }),
-        // 使用函数的参数
-        formal_free_vars: fvs,
-        body,
+      let func_def = if flag {
+        {
+          name: f.name.to_string(),
+          old_name: f.name, // 旧名称与新名称相同
+          is_closure: true,
+          ty: type_to_lowtype(f.ty),
+          args: f.args.map(fn(arg) { (arg.0, type_to_lowtype(arg.1)) }),
+          // 使用函数的参数
+          formal_free_vars: fvs,
+          body,
+        }
+      } else {
+        {
+          name: f.name.to_string(),
+          old_name: f.name, // 旧名称与新名称相同
+          is_closure: false,
+          ty: type_to_lowtype(f.ty),
+          args: f.args.map(fn(arg) { (arg.0, type_to_lowtype(arg.1)) }),
+          // 使用函数的参数
+          formal_free_vars: fvs,
+          body,
+        }
       }
       let cls = { name: func_def.name, actual_free_vars: free_vars }
       // 创建闭包
-      let closure = MakeClosure(
-        (f.name, type_to_lowtype(f.ty)),
-        cls,
-        knf_program_to_closure(rest, extern_env).body,
-      )
+      let temp = knf_program_to_closure(rest, extern_env, flag)
+      let closure = MakeClosure((f.name, type_to_lowtype(f.ty)), cls, temp.body)
       // 返回新的程序，包含闭包
-      let fundefs = knf_program_to_closure(rest, extern_env).fundefs
+
+      let fundefs = temp.fundefs
       fundefs.push(func_def)
       for fundef in body_program.fundefs {
         fundefs.push(fundef)
@@ -172,13 +187,20 @@ pub fn knf_program_to_closure(
         body: closure,
       }
     }
-    Apply(x, ys) => { fundefs: [], body: CallClosure(x, ys) } //TODO: 处理直接函数调用
+    Apply(x, ys) => {
+      let res = closure_table.get(x.to_string())
+      if res.unwrap() {
+        { fundefs: [], body: CallClosure(x, ys) }
+      } else {
+        { fundefs: [], body: CallDirect(x.name.to_string(), ys) }
+      }
+    } //TODO: 处理直接函数调用
     Tuple(xs) => { fundefs: [], body: MakeTuple(xs) }
     LetTuple(xts, y, e) => {
       for xt in xts {
         extern_env[xt.0.to_string()] = xt.1
       }
-      let e_programe = knf_program_to_closure(e, extern_env)
+      let e_programe = knf_program_to_closure(e, extern_env, flag)
       let e_closure = e_programe.body
       {
         fundefs: e_programe.fundefs,

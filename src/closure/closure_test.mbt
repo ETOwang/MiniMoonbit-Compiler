@@ -31,6 +31,7 @@ test {
   let closure_ir = @closure.knf_program_to_closure(
     knf,
     Map::from_iter(externals().iter()),
+    false,
   )
   println(closure_ir)
 }

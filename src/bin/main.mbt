@@ -109,6 +109,7 @@ fn CompileStatus::step(self : CompileStatus) -> Bool {
       let closure_ir = @closure.knf_program_to_closure(
         self.opt_knf.unwrap(),
         Map::from_iter(externals().iter()),
+        false,
       )
       self.closure_ir = Some(closure_ir)
     }
