@@ -92,7 +92,7 @@ pub fn KnfEnv::init_env_from_existing(env : KnfEnv) -> KnfEnv {
     signTable: @hashmap.T::new(),
     funcTable: @hashmap.T::new(),
     func_name_and_type: @hashmap.T::new(),
-    name_and_type: @hashmap.T::new()
+    name_and_type: @hashmap.T::new(),
   }
 }
 
@@ -303,7 +303,10 @@ pub fn KnfEnv::to_knf(self : KnfEnv, s : @types.Syntax) -> Knf {
       // }
     }
     LetRec({ name: (x, t), args: yts, body: e1 }, e2) => {
-      let xName = new_temp(self)
+      let mut xName = new_temp(self)
+      if x == "main" {
+        xName = { name: Some("minimbt_main"), slot: 0 }
+      }
       // println(x)
       let argsType : Array[Type] = Array::new()
       for item in yts {
@@ -610,8 +613,12 @@ pub fn KnfEnv::to_knf(self : KnfEnv, s : @types.Syntax) -> Knf {
                 self,
                 k3,
                 get_knf_type(self, k3),
-                fn(z : Name) -> Knf { 
-                  Knf::Let((Name::slot_only(0), Type::Unit), Put(x, y, z), to_knf(self, e3))
+                fn(z : Name) -> Knf {
+                  Knf::Let(
+                    (Name::slot_only(0), Type::Unit),
+                    Put(x, y, z),
+                    to_knf(self, e3),
+                  )
                 },
               )
             },
