@@ -1,12 +1,20 @@
 pub struct RegAllocator {
-    available_regs: Array[Reg]               // 可用寄存器
-    used_regs: @immut/hashmap.T[String, Reg]         // 已使用的寄存器
-    stack: Array[(String, Reg)]               // 存储溢出时的寄存器和变量信息
-    stack_offset: Int                      // 栈偏移量，表示当前栈的位置
+  available_regs : Array[Reg] // 可用寄存器
+  available_fregs : Array[FReg]
+  used_regs : @immut/hashmap.T[@typing.Name, Reg] // 已使用的寄存器
+  stack : @hashmap.T[@typing.Name, Int] // 存储溢出时的寄存器和变量信息
+  stack_offset : Int // 栈偏移量，表示当前栈的位置
 }
 
+let regAllocator : RegAllocator = {
+  available_regs: reg_allocatable_list,
+  available_fregs: freg_allocatable_list,
+  used_regs: @immut/hashmap.new(),
+  stack: @hashmap.new(),
+  stack_offset: 0,
+}
 
-
+let riscvs : Array[RvAsm] = Array::new()
 
 // impl for RegAllocator {
 //     pub fn new() -> Self {
@@ -53,7 +61,7 @@ pub struct RegAllocator {
 //             self.spill_to_stack(old_var_name, old_reg);
 //             self.used_regs.remove(old_var_name); // 移除溢出寄存器的使用
 //         }
-        
+
 //         // 继续分配一个新的寄存器
 //         self.allocate(var_name)
 //     }
@@ -78,79 +86,265 @@ pub struct RegAllocator {
 //     }
 // }
 
-
-
-
-
 pub struct InputFunction {
-    name: String
-    export: Bool
-    instructions: Array[RvAsm]
+  name : String
+  export : Bool
+  instructions : Array[RvAsm]
 }
 
+fn preProcess(body : @closure.Expr) -> Int {
+  let mut res = 0
+  match body {
+    Let(lhs, rhs, rest) => {
+      match lhs.1 {
+        Unit => res += 0
+        Int | Bool => {
+          regAllocator.stack[lhs.0] = res
+          res += 4
+        }
+        _ => {
+          regAllocator.stack[lhs.0] = res
+          res += 8
+        }
+      }
+      res += preProcess(rhs)
+      res += preProcess(rest)
+    }
+    LetTuple(lhs, rhs, rest) => {
+      for variable in lhs {
+        match variable.1 {
+          Unit => res += 0
+          Int | Bool => {
+            regAllocator.stack[variable.0] = res
+            res += 4
+          }
+          _ => {
+            regAllocator.stack[variable.0] = res
+            res += 8
+          }
+        }
+      }
+      res += preProcess(rest)
+    }
+    // TODO Array
+    _ => ()
+  }
+  res
+}
 
+fn processInstruction(
+  expr : @closure.Expr,
+  reg_allocator : RegAllocator
+) -> Reg  {
+  match expr {
+    Add(lhs, rhs) => {
+      let lhs_location = reg_allocator.stack[lhs]
+      let rhs_location = reg_allocator.stack[rhs]
+      let lhs_memAccess = {base: Sp, offset: lhs_location.unwrap()}
+      riscvs.push(Lw(T0, lhs_memAccess))
+      let rhs_memAccess = {base: Sp, offset: rhs_location.unwrap()}
+      riscvs.push(Lw(T1, rhs_memAccess))
+      riscvs.push(Add(T0, T0, T1))
+      T0
+    }
+    Sub(lhs, rhs) => {
+      let lhs_location = reg_allocator.stack[lhs]
+      let rhs_location = reg_allocator.stack[rhs]
+      let lhs_memAccess = {base: Sp, offset: lhs_location.unwrap()}
+      riscvs.push(Lw(T0, lhs_memAccess))
+      let rhs_memAccess = {base: Sp, offset: rhs_location.unwrap()}
+      riscvs.push(Lw(T1, rhs_memAccess))
+      riscvs.push(Sub(T0, T0, T1))
+      T0
+    }
+    Mul(lhs, rhs) => {
+      let lhs_location = reg_allocator.stack[lhs]
+      let rhs_location = reg_allocator.stack[rhs]
+      let lhs_memAccess = {base: Sp, offset: lhs_location.unwrap()}
+      riscvs.push(Lw(T0, lhs_memAccess))
+      let rhs_memAccess = {base: Sp, offset: rhs_location.unwrap()}
+      riscvs.push(Lw(T1, rhs_memAccess))
+      riscvs.push(Mul(T0, T0, T1))
+      T0
+    }
+    Div(lhs, rhs) => {
+      let lhs_location = reg_allocator.stack[lhs]
+      let rhs_location = reg_allocator.stack[rhs]
+      let lhs_memAccess = {base: Sp, offset: lhs_location.unwrap()}
+      riscvs.push(Lw(T0, lhs_memAccess))
+      let rhs_memAccess = {base: Sp, offset: rhs_location.unwrap()}
+      riscvs.push(Lw(T1, rhs_memAccess))
+      riscvs.push(Div(T0, T0, T1))
+      T0
+    }
+    FAdd(lhs, rhs) => {
+      let lhs_location = reg_allocator.stack[lhs]
+      let rhs_location = reg_allocator.stack[rhs]
+      let lhs_memAccess = {base: Sp, offset: lhs_location.unwrap()}
+      riscvs.push(Fld(Ft0, lhs_memAccess))
+      let rhs_memAccess = {base: Sp, offset: rhs_location.unwrap()}
+      riscvs.push(Fld(Ft1, rhs_memAccess))
+      riscvs.push(FaddD(Ft0, Ft0, Ft1))
+      riscvs.push(FmvDX(Ft0, T0))
+      T0
+    }
+    FSub(lhs, rhs) => {
+      let lhs_location = reg_allocator.stack[lhs]
+      let rhs_location = reg_allocator.stack[rhs]
+      let lhs_memAccess = {base: Sp, offset: lhs_location.unwrap()}
+      riscvs.push(Fld(Ft0, lhs_memAccess))
+      let rhs_memAccess = {base: Sp, offset: rhs_location.unwrap()}
+      riscvs.push(Fld(Ft1, rhs_memAccess))
+      riscvs.push(FsubD(Ft0, Ft0, Ft1))
+      riscvs.push(FmvDX(Ft0, T0))
+      T0
+    }
+    FMul(lhs, rhs) => {
+      let lhs_location = reg_allocator.stack[lhs]
+      let rhs_location = reg_allocator.stack[rhs]
+      let lhs_memAccess = {base: Sp, offset: lhs_location.unwrap()}
+      riscvs.push(Fld(Ft0, lhs_memAccess))
+      let rhs_memAccess = {base: Sp, offset: rhs_location.unwrap()}
+      riscvs.push(Fld(Ft1, rhs_memAccess))
+      riscvs.push(FmulD(Ft0, Ft0, Ft1))
+      riscvs.push(FmvDX(Ft0, T0))
+      T0
+    }
+    FDiv(lhs, rhs) => {
+      let lhs_location = reg_allocator.stack[lhs]
+      let rhs_location = reg_allocator.stack[rhs]
+      let lhs_memAccess = {base: Sp, offset: lhs_location.unwrap()}
+      riscvs.push(Fld(Ft0, lhs_memAccess))
+      let rhs_memAccess = {base: Sp, offset: rhs_location.unwrap()}
+      riscvs.push(Fld(Ft1, rhs_memAccess))
+      riscvs.push(FdivD(Ft0, Ft0, Ft1))
+      riscvs.push(FmvDX(Ft0, T0))
+      T0
+    }
+    Neg(var) => {
+      let var_location = reg_allocator.stack[var]
+      let var_memAccess = {base: Sp, offset: var_location.unwrap()}
+      riscvs.push(Lw(T0, var_memAccess))
+      riscvs.push(Neg(T0, T0))
+      T0
+    }
+    FNeg(var) => {
+      let var_location = reg_allocator.stack[var]
+      let var_memAccess = {base: Sp, offset: var_location.unwrap()}
+      riscvs.push(Fld(Ft0, var_memAccess))
+      riscvs.push(FnegD(Ft0, Ft0))
+      riscvs.push(FmvDX(Ft0, T0))
+      T0
+    }
+    Let((var, _), rhs, rest) => {
+      let rhs_reg = processInstruction(rhs, reg_allocator)
+      let var_memAccess = {base: Sp, offset: reg_allocator.stack[var].unwrap()}
+      riscvs.push(Sw(rhs_reg, var_memAccess))
+      processInstruction(rest, reg_allocator)
+    }
 
+    IfEq(lhs, rhs, then, els) => {
+      let lhs_location = reg_allocator.stack[lhs]
+      let rhs_location = reg_allocator.stack[rhs]
+      let lhs_memAccess = {base: Sp, offset: lhs_location.unwrap()}
+      riscvs.push(Lw(T0, lhs_memAccess))
+      let rhs_memAccess = {base: Sp, offset: rhs_location.unwrap()}
+      riscvs.push(Lw(T1, rhs_memAccess))
+      riscvs.push(Beq(T0, T1, "else"))
+      let _ = processInstruction(then, reg_allocator)
+      riscvs.push(J("end"))
+      riscvs.push(Label("else"))
+      let elseResult = processInstruction(els, reg_allocator)
+      riscvs.push(Label("end"))
+      elseResult
+    }
 
-pub fn emit(input: @closure.Program) -> Array[AssemblyFunction] {
-    // let mut functions: Vec<AssemblyFunction> = Vec::new();
+    IfLe(lhs, rhs, then, els) => {
+      let lhs_location = reg_allocator.stack[lhs]
+      let rhs_location = reg_allocator.stack[rhs]
+      let lhs_memAccess = {base: Sp, offset: lhs_location.unwrap()}
+      riscvs.push(Lw(T0, lhs_memAccess))
+      let rhs_memAccess = {base: Sp, offset: rhs_location.unwrap()}
+      riscvs.push(Lw(T1, rhs_memAccess))
+      riscvs.push(Blt(T0, T1, "else"))
+      let _ = processInstruction(then, reg_allocator)
+      riscvs.push(J("end"))
+      riscvs.push(Label("else"))
+      let elseResult = processInstruction(els, reg_allocator)
+      riscvs.push(Label("end"))
+      elseResult
+    }
     
-    // // 创建寄存器分配器
-    // let mut reg_allocator = RegAllocator::new();
-
-    // // 处理每个函数
-    // for func in input {
-    //     let mut assembly_instructions: Vec<RvAsm> = Vec::new();
-
-    //     // 处理函数中的每一条指令
-    //     for instr in func.instructions {
-    //         match instr {
-    //             // 假设处理的是赋值操作
-    //             RvAsm::Assign(var_name, expr) => {
-    //                 // 为变量分配寄存器或处理溢出
-    //                 let reg = reg_allocator.allocate(   var_name);
-    //                 match reg {
-    //                     Some(r) => {
-    //                         // 根据表达式生成汇编代码
-    //                         let asm = generate_assignment_asm(   var_name, expr, r);
-    //                         assembly_instructions.push(asm);
-    //                     },
-    //                     None => {
-    //                         // 如果寄存器溢出，将变量存入栈
-    //                         let stack_offset = reg_allocator.get_stack_offset();
-    //                         let asm = generate_stack_assignment_asm(   var_name, expr, stack_offset);
-    //                         assembly_instructions.push(asm);
-    //                     }
-    //                 }
-    //             },
-    //             // 如果是其他类型的汇编指令
-    //             _ => {
-    //                 let asm = generate_other_asm(instr);
-    //                 assembly_instructions.push(asm);
-    //             }
-    //         }
-    //     }
-
-    //     // 为当前函数生成汇编代码
-    //     let assembly_function = AssemblyFunction {
-    //         name: func.name,
-    //         export: func.export,
-    //         body: assembly_instructions,
-    //     };
-
-    //     // 将生成的汇编函数添加到最终输出中
-    //     functions.push(assembly_function);
-    // }
-
-    // functions
+    Var(var) => {
+      let var_location = reg_allocator.stack[var]
+      if (var_location.is_empty()) {
+        let var_reg = reg_allocator.used_regs[var].unwrap()
+        var_reg
+      }
+      else {
+        let var_memAccess = {base: Sp, offset: var_location.unwrap()}
+        riscvs.push(Ld(T0, var_memAccess))
+        T0
+      }
+    }
+    // assume this is a double array
+    ArrayGet(arr, idx) => {
+      let arr_location = reg_allocator.stack[arr]
+      let arr_memAccess = {base: Sp, offset: arr_location.unwrap()}
+      riscvs.push(Ld(T0, arr_memAccess))
+      let idx_location = reg_allocator.stack[idx]
+      let idx_memAccess = {base: Sp, offset: idx_location.unwrap()}
+      riscvs.push(Ld(T1, idx_memAccess))
+      riscvs.push(Add(T0, T0, T1))
+      let element_location = {base: T0, offset: 0}
+      riscvs.push(Ld(T0, element_location))
+      T0
+    }
+    ArrayPut(arr, idx, value) => {
+      let arr_location = reg_allocator.stack[arr]
+      let arr_memAccess = {base: Sp, offset: arr_location.unwrap()}
+      riscvs.push(Ld(T0, arr_memAccess))
+      let idx_location = reg_allocator.stack[idx]
+      let idx_memAccess = {base: Sp, offset: idx_location.unwrap()}
+      riscvs.push(Ld(T1, idx_memAccess))
+      riscvs.push(Add(T0, T0, T1))
+      let value_location = reg_allocator.stack[value]
+      let value_memAccess = {base: Sp, offset: value_location.unwrap()}
+      riscvs.push(Ld(T1, value_memAccess))
+      let element_location = {base: T0, offset: 0}
+      riscvs.push(Sd(T1, element_location))
+      T1
+    }
+  }
 }
 
+fn processFunction(
+  funtion : @closure.FuncDef,
+  reg_allocator : RegAllocator
+) -> AssemblyFunction {
+  let res = {
+    name: funtion.name.to_string(),
+    export: false,
+    body: Array::new(),
+  }
+  let stackSize : Int = preProcess(funtion.body)
+  res.body.push(Addi(Sp, Sp, -stackSize))
+  let _ = processInstruction(funtion.body, reg_allocator)
+  for asm in riscvs {
+    res.body.push(asm)
+  }
+  res.body.push(Addi(Sp, Sp, stackSize))
+  riscvs.clear()
+  res
+}
 
-
-
-
-
-
-
+pub fn emit(input : @closure.Program) -> Array[AssemblyFunction] {
+  let res = Array::new()
+  for fun in input.fundefs {
+    res.push(processFunction(fun, regAllocator))
+  }
+  res
+}
 
 pub struct AssemblyFunction {
   name : String
@@ -161,7 +355,6 @@ pub struct AssemblyFunction {
 pub fn AssemblyFunction::output(
   self : AssemblyFunction,
   logger : Logger,
-  reg_allocator:    RegAllocator
 ) -> Unit {
   let name = self.name
   if self.export {
@@ -169,7 +362,8 @@ pub fn AssemblyFunction::output(
   }
   logger.write_string("\{name}:\n")
   for asm in self.body {
-     Show::output(asm, logger)
+    Show::output(asm, logger)
     logger.write_string("\n")
   }
 }
+
