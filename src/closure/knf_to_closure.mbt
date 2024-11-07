@@ -188,11 +188,14 @@ pub fn knf_program_to_closure(
       }
     }
     Apply(x, ys) => {
+      //TODO
       let res = closure_table.get(x.to_string())
-      if res.unwrap() {
+      if res.is_empty() {
+        { fundefs: [], body: CallClosure(x, ys) }
+      } else if res.unwrap() {
         { fundefs: [], body: CallClosure(x, ys) }
       } else {
-        { fundefs: [], body: CallDirect(x.name.to_string(), ys) }
+        { fundefs: [], body: CallDirect(x.to_string(), ys) }
       }
     } //TODO: 处理直接函数调用
     Tuple(xs) => { fundefs: [], body: MakeTuple(xs) }
