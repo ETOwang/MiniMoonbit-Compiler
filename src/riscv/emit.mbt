@@ -4,7 +4,7 @@ pub struct RegAllocator {
   used_regs : @hashmap.T[@types.Name, Reg] // 已使用的寄存器
   used_fregs : @hashmap.T[@types.Name, FReg] // 已使用的寄存器
   stack : @hashmap.T[@types.Name, Int] // 存储溢出时的寄存器和变量信息
-  stack_offset : Int // 栈偏移量，表示当前栈的位置
+  mut stack_offset : Int // 栈偏移量，表示当前栈的位置
   mut temp_index : Int
 }
 
@@ -21,11 +21,13 @@ fn preProcess(body : @closure.Expr, regAllocator : RegAllocator) -> Int {
       match lhs.1 {
         Unit => res += 0
         Int | Bool => {
-          regAllocator.stack[lhs.0] = res
+          regAllocator.stack[lhs.0] = regAllocator.stack_offset
+          regAllocator.stack_offset+=4;
           res += 4
         }
         _ => {
-          regAllocator.stack[lhs.0] = res
+          regAllocator.stack[lhs.0] = regAllocator.stack_offset
+          regAllocator.stack_offset+=8;
           res += 8
         }
       }
@@ -37,11 +39,13 @@ fn preProcess(body : @closure.Expr, regAllocator : RegAllocator) -> Int {
         match variable.1 {
           Unit => res += 0
           Int | Bool => {
-            regAllocator.stack[variable.0] = res
+            regAllocator.stack[variable.0] = regAllocator.stack_offset
+            regAllocator.stack_offset+=4;
             res += 4
           }
           _ => {
-            regAllocator.stack[variable.0] = res
+            regAllocator.stack[variable.0] = regAllocator.stack_offset
+            regAllocator.stack_offset+=8;
             res += 8
           }
         }
@@ -53,6 +57,7 @@ fn preProcess(body : @closure.Expr, regAllocator : RegAllocator) -> Int {
   }
   res
 }
+
 
 fn prepareArgs(args : Array[@types.Name], reg_allocator : RegAllocator) -> Unit {
   let mut regIndex = 0
@@ -383,6 +388,7 @@ fn processFunction(
     res.body.push(asm)
   }
   res.body.push(Addi(Sp, Sp, stackSize))
+  res.body.push(Ecall)
   riscvs.clear()
   res
 }
