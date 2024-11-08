@@ -65,13 +65,18 @@ fn prepareArgs(args : Array[@types.Name], reg_allocator : RegAllocator) -> Unit 
     match arg_type.unwrap() {
       Int(_) => {
         reg_allocator.used_regs[arg] = reg_arg_list[regIndex]
-        riscvs.push(Ld(reg_arg_list[regIndex], arg_memAccess))
+        riscvs.push(Lw(reg_arg_list[regIndex], arg_memAccess))
         regIndex += 1
       }
-      _ => {
+      Double(_) => {
         reg_allocator.used_fregs[arg] = freg_arg_list[fregIndex]
         riscvs.push(Fld(freg_arg_list[fregIndex], arg_memAccess))
         fregIndex += 1
+      }
+      _=>{
+        reg_allocator.used_regs[arg] = reg_arg_list[regIndex]
+        riscvs.push(Ld(reg_arg_list[regIndex], arg_memAccess))
+        regIndex += 1
       }
     }
   }
