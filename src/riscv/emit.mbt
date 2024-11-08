@@ -388,7 +388,7 @@ fn processFunction(
     res.body.push(asm)
   }
   res.body.push(Addi(Sp, Sp, stackSize))
-  res.body.push(Ecall)
+  res.body.push(Ret)
   riscvs.clear()
   res
 }
