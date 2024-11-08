@@ -5,6 +5,7 @@ pub struct RegAllocator {
   used_fregs : @hashmap.T[@types.Name, FReg] // 已使用的寄存器
   stack : @hashmap.T[@types.Name, Int] // 存储溢出时的寄存器和变量信息
   stack_offset : Int // 栈偏移量，表示当前栈的位置
+  mut temp_index : Int
 }
 
 let riscvs : Array[RvAsm] = Array::new()
@@ -76,6 +77,13 @@ fn prepareArgs(args : Array[@types.Name], reg_allocator : RegAllocator) -> Unit 
   }
 }
 
+fn prepareTempReg(reg_allocator : RegAllocator) -> Reg {
+  let temp_reg = reg_temp_list[reg_allocator.temp_index]
+  reg_allocator.temp_index += 1
+  reg_allocator.temp_index %= reg_temp_list.length()
+  temp_reg
+}
+
 fn processInstruction(
   expr : @closure.Expr,
   reg_allocator : RegAllocator
@@ -106,7 +114,7 @@ fn processInstruction(
       processInstruction(rest, reg_allocator)
     }
     MakeClosure((var, _), closure, rest) => {
-      let funcdef = closureTable[closure.name.to_string()].unwrap()
+      let funcdef = closureTable[closure.name._].unwrap()
       let free_vars = funcdef.formal_free_vars
       for fv in free_vars {
         let fv_location = reg_allocator.stack[fv.0]
@@ -121,60 +129,71 @@ fn processInstruction(
     }
     ExternalArray(label) => {
       let label_location = { base: Sp, offset: 0 }
-      riscvs.push(La(T0, label.to_string()))
+      riscvs.push(La(T0, label._))
       riscvs.push(Sd(T0, label_location))
       T0
     }
     //TODO
     Int(value) => {
-      riscvs.push(Li(T0, value.to_string()))
-      T0
+      let reg = prepareTempReg(reg_allocator)
+      riscvs.push(Li(reg, value.to_string()))
+      reg
     }
     Double(value) => {
-      riscvs.push(Li(T0, value.to_string()))
-      T0
+      let reg = prepareTempReg(reg_allocator)
+      riscvs.push(Li(reg, value.to_string()))
+      reg
     }
     Add(lhs, rhs) => {
+      let reg1 = prepareTempReg(reg_allocator)
+      let reg2 = prepareTempReg(reg_allocator)
       let lhs_location = reg_allocator.stack[lhs]
       let rhs_location = reg_allocator.stack[rhs]
       let lhs_memAccess = { base: Sp, offset: lhs_location.unwrap() }
-      riscvs.push(Lw(T0, lhs_memAccess))
+      riscvs.push(Lw(reg1, lhs_memAccess))
       let rhs_memAccess = { base: Sp, offset: rhs_location.unwrap() }
-      riscvs.push(Lw(T1, rhs_memAccess))
-      riscvs.push(Add(T0, T0, T1))
-      T0
+      riscvs.push(Lw(reg2, rhs_memAccess))
+      riscvs.push(Add(reg1, reg1, reg2))
+      reg1
     }
     Sub(lhs, rhs) => {
+      let reg1 = prepareTempReg(reg_allocator)
+      let reg2 = prepareTempReg(reg_allocator)
       let lhs_location = reg_allocator.stack[lhs]
       let rhs_location = reg_allocator.stack[rhs]
       let lhs_memAccess = { base: Sp, offset: lhs_location.unwrap() }
-      riscvs.push(Lw(T0, lhs_memAccess))
+      riscvs.push(Lw(reg1, lhs_memAccess))
       let rhs_memAccess = { base: Sp, offset: rhs_location.unwrap() }
-      riscvs.push(Lw(T1, rhs_memAccess))
-      riscvs.push(Sub(T0, T0, T1))
-      T0
+      riscvs.push(Lw(reg2, rhs_memAccess))
+      riscvs.push(Sub(reg1, reg1, reg2))
+      reg1
     }
     Mul(lhs, rhs) => {
+      let reg1 = prepareTempReg(reg_allocator)
+      let reg2 = prepareTempReg(reg_allocator)
       let lhs_location = reg_allocator.stack[lhs]
       let rhs_location = reg_allocator.stack[rhs]
       let lhs_memAccess = { base: Sp, offset: lhs_location.unwrap() }
-      riscvs.push(Lw(T0, lhs_memAccess))
+      riscvs.push(Lw(reg1, lhs_memAccess))
       let rhs_memAccess = { base: Sp, offset: rhs_location.unwrap() }
-      riscvs.push(Lw(T1, rhs_memAccess))
-      riscvs.push(Mul(T0, T0, T1))
-      T0
+      riscvs.push(Lw(reg2, rhs_memAccess))
+      riscvs.push(Mul(reg1, reg1, reg2))
+      reg1
     }
     Div(lhs, rhs) => {
+      let reg1 = prepareTempReg(reg_allocator)
+      let reg2 = prepareTempReg(reg_allocator)
       let lhs_location = reg_allocator.stack[lhs]
       let rhs_location = reg_allocator.stack[rhs]
       let lhs_memAccess = { base: Sp, offset: lhs_location.unwrap() }
-      riscvs.push(Lw(T0, lhs_memAccess))
+      riscvs.push(Lw(reg1, lhs_memAccess))
       let rhs_memAccess = { base: Sp, offset: rhs_location.unwrap() }
-      riscvs.push(Lw(T1, rhs_memAccess))
-      riscvs.push(Div(T0, T0, T1))
+      riscvs.push(Lw(reg2, rhs_memAccess))
+      riscvs.push(Div(reg1, reg1, reg2))
       T0
     }
     FAdd(lhs, rhs) => {
+      let reg1 = prepareTempReg(reg_allocator)
       let lhs_location = reg_allocator.stack[lhs]
       let rhs_location = reg_allocator.stack[rhs]
       let lhs_memAccess = { base: Sp, offset: lhs_location.unwrap() }
@@ -182,10 +201,11 @@ fn processInstruction(
       let rhs_memAccess = { base: Sp, offset: rhs_location.unwrap() }
       riscvs.push(Fld(Ft1, rhs_memAccess))
       riscvs.push(FaddD(Ft0, Ft0, Ft1))
-      riscvs.push(FmvDX(Ft0, T0))
-      T0
+      riscvs.push(FmvDX(Ft0, reg1))
+      reg1
     }
     FSub(lhs, rhs) => {
+      let reg1 = prepareTempReg(reg_allocator)
       let lhs_location = reg_allocator.stack[lhs]
       let rhs_location = reg_allocator.stack[rhs]
       let lhs_memAccess = { base: Sp, offset: lhs_location.unwrap() }
@@ -193,10 +213,11 @@ fn processInstruction(
       let rhs_memAccess = { base: Sp, offset: rhs_location.unwrap() }
       riscvs.push(Fld(Ft1, rhs_memAccess))
       riscvs.push(FsubD(Ft0, Ft0, Ft1))
-      riscvs.push(FmvDX(Ft0, T0))
-      T0
+      riscvs.push(FmvDX(Ft0, reg1))
+      reg1
     }
     FMul(lhs, rhs) => {
+      let reg1 = prepareTempReg(reg_allocator)
       let lhs_location = reg_allocator.stack[lhs]
       let rhs_location = reg_allocator.stack[rhs]
       let lhs_memAccess = { base: Sp, offset: lhs_location.unwrap() }
@@ -204,10 +225,11 @@ fn processInstruction(
       let rhs_memAccess = { base: Sp, offset: rhs_location.unwrap() }
       riscvs.push(Fld(Ft1, rhs_memAccess))
       riscvs.push(FmulD(Ft0, Ft0, Ft1))
-      riscvs.push(FmvDX(Ft0, T0))
-      T0
+      riscvs.push(FmvDX(Ft0, reg1))
+      reg1
     }
     FDiv(lhs, rhs) => {
+      let reg1 = prepareTempReg(reg_allocator)
       let lhs_location = reg_allocator.stack[lhs]
       let rhs_location = reg_allocator.stack[rhs]
       let lhs_memAccess = { base: Sp, offset: lhs_location.unwrap() }
@@ -215,23 +237,25 @@ fn processInstruction(
       let rhs_memAccess = { base: Sp, offset: rhs_location.unwrap() }
       riscvs.push(Fld(Ft1, rhs_memAccess))
       riscvs.push(FdivD(Ft0, Ft0, Ft1))
-      riscvs.push(FmvDX(Ft0, T0))
-      T0
+      riscvs.push(FmvDX(Ft0, reg1))
+      reg1
     }
     Neg(var) => {
+      let reg1 = prepareTempReg(reg_allocator)
       let var_location = reg_allocator.stack[var]
       let var_memAccess = { base: Sp, offset: var_location.unwrap() }
-      riscvs.push(Lw(T0, var_memAccess))
-      riscvs.push(Neg(T0, T0))
-      T0
+      riscvs.push(Lw(reg1, var_memAccess))
+      riscvs.push(Neg(reg1, reg1))
+      reg1
     }
     FNeg(var) => {
+      let reg1 = prepareTempReg(reg_allocator)
       let var_location = reg_allocator.stack[var]
       let var_memAccess = { base: Sp, offset: var_location.unwrap() }
       riscvs.push(Fld(Ft0, var_memAccess))
       riscvs.push(FnegD(Ft0, Ft0))
-      riscvs.push(FmvDX(Ft0, T0))
-      T0
+      riscvs.push(FmvDX(Ft0, reg1))
+      reg1
     }
     Let((var, ty), rhs, rest) => {
       let rhs_reg = processInstruction(rhs, reg_allocator)
@@ -323,7 +347,7 @@ fn processInstruction(
     CallDirect(label, args) => {
       //TODO:FuncPtr
       prepareArgs(args, reg_allocator)
-      riscvs.push(Call(label.to_string()))
+      riscvs.push(Call(label._))
       reg_ret
     }
     CallClosure(closure, args) => {
@@ -342,10 +366,10 @@ fn processFunction(
   funtion : @closure.FuncDef,
   reg_allocator : RegAllocator
 ) -> AssemblyFunction {
-  let res = if funtion.name.to_string() == "minimbt_main" {
-    { name: funtion.name.to_string(), export: true, body: Array::new() }
+  let res = if funtion.name._ == "minimbt_main" {
+    { name: funtion.name._, export: true, body: Array::new() }
   } else {
-    { name: funtion.name.to_string(), export: false, body: Array::new() }
+    { name: funtion.name._, export: false, body: Array::new() }
   }
   let stackSize : Int = preProcess(funtion.body, reg_allocator)
   res.body.push(Addi(Sp, Sp, -stackSize))
@@ -381,31 +405,9 @@ pub fn AssemblyFunction::output(
 
 pub fn emit(input : @closure.Program) -> Array[AssemblyFunction] {
   let res = Array::new()
-  res.push({ name: "minimbt_read_int", export: true, body: Array::new() })
-  res.push({ name: "minimbt_print_int", export: true, body: Array::new() })
-  res.push({ name: "minimbt_read_char", export: true, body: Array::new() })
-  res.push({ name: "minimbt_print_char", export: true, body: Array::new() })
-  res.push({ name: "minimbt_print_endline", export: true, body: Array::new() })
-  res.push({ name: "minimbt_int_of_float", export: true, body: Array::new() })
-  res.push({ name: "minimbt_float_of_int", export: true, body: Array::new() })
-  res.push({ name: "minimbt_truncate", export: true, body: Array::new() })
-  res.push({ name: "minimbt_floor", export: true, body: Array::new() })
-  res.push({ name: "minimbt_abs_float", export: true, body: Array::new() })
-  res.push({ name: "minimbt_sqrt", export: true, body: Array::new() })
-  res.push({ name: "minimbt_sin", export: true, body: Array::new() })
-  res.push({ name: "minimbt_cos", export: true, body: Array::new() })
-  res.push({ name: "minimbt_atan", export: true, body: Array::new() })
-  res.push({ name: "minimbt_malloc", export: true, body: Array::new() })
-  res.push({ name: "minimbt_create_array", export: true, body: Array::new() })
-  res.push(
-    { name: "minimbt_create_float_array", export: true, body: Array::new() },
-  )
-  res.push(
-    { name: "minimbt_create_ptr_array", export: true, body: Array::new() },
-  )
   for fun in input.fundefs {
     if fun.is_closure {
-      closureTable[fun.name.to_string()] = fun
+      closureTable[fun.name._] = fun
     }
   }
   for fun in input.fundefs {
@@ -416,6 +418,7 @@ pub fn emit(input : @closure.Program) -> Array[AssemblyFunction] {
       used_fregs: @hashmap.new(),
       stack: @hashmap.new(),
       stack_offset: 0,
+      temp_index: 0,
     }
     res.push(processFunction(fun, regAllocator))
   }
