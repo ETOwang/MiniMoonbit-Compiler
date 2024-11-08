@@ -41,6 +41,8 @@ let reg_swap : Reg
 
 let reg_temp_list : Array[Reg]
 
+Let((_5, Unit), Let((_4, Double), Let((_3, Double), Double(12.3), FNeg(_3)), ExternalFunctionApplication("minimbt_abs_float", [_4])), ExternalFunctionApplication("minimbt_sqrt", [_5]))
+
 // Types and methods
 pub struct AssemblyFunction {
   pub name : String

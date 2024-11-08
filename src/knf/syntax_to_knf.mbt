@@ -176,9 +176,44 @@ pub fn get_knf_type(self : KnfEnv, knf : Knf) -> Type {
     Knf::Get(array, _) => getTypeFromName(self, array) // 假设 Get 返回 Int 类型
     Knf::Put(_, e2, e3) => getTypeFromName(self, e3) // 假设 Put 返回 Unit 类型
     Knf::ExternalArray(_) => Type::Array(Type::Int)
-    Knf::ExternalFunctionApplication(_, _) => Type::Unit
-    // 可以添加更多变体的处理...
+    Knf::ExternalFunctionApplication(str, _) =>
+      if str == "minimbt_create_array" {
+        Type::Array(Type::Int)
+      } else if str == "minimbt_create_float_array" {
+        Type::Array(Type::Double)
+      } else if str == "minimbt_sqrt" {
+        Type::Double
+      } else if str == "minimbt_sin" {
+        Type::Double
+      } else if str == "minimbt_cos" {
+        Type::Double
+      } else if str == "minimbt_abs_float" {
+        Type::Double
+      } else if str == "minimbt_int_of_float" {
+        Type::Int
+      } else if str == "minimbt_float_of_int" {
+        Type::Double
+      } else if str == "minimbt_print_int" {
+        Type::Unit
+      } else if str == "minimbt_print_char" {
+        Type::Unit
+      } else if str == "mini_print_endline" {
+        Type::Unit
+      } else if str == "minimbt_print_newline" {
+        Type::Unit
+      } else if str == "minimbt_read_int" {
+        Type::Int
+      } else if str == "minimbt_read_char" {
+        Type::Int
+      } else if str == "minimbt_create_ptr_array" {
+        Type::Array(Type::Ptr)
+      } else if str == "truncate" {
+        Type::Int
+      } else {
+        Type::Array(Type::Ptr)
+      }
   }
+  // 可以添加更多变体的处理...
 }
 
 pub fn KnfEnv::to_knf(self : KnfEnv, s : @types.Syntax) -> Knf {
