@@ -62,6 +62,36 @@ fn preProcess(body : @closure.Expr, regAllocator : RegAllocator) -> Int {
   res
 }
 
+fn prepareOperands(
+  lhs : @types.Name,
+  rhs : @types.Name,
+  reg_allocator : RegAllocator
+) -> (Reg, Reg) {
+  let reg1 = prepareTempReg(reg_allocator)
+  let reg2 = prepareTempReg(reg_allocator)
+  let lhs_location = reg_allocator.stack[lhs]
+  let rhs_location = reg_allocator.stack[rhs]
+  let lhs_memAccess = { base: Sp, offset: lhs_location.unwrap() }
+  riscvs.push(Lw(reg1, lhs_memAccess))
+  let rhs_memAccess = { base: Sp, offset: rhs_location.unwrap() }
+  riscvs.push(Lw(reg2, rhs_memAccess))
+  (reg1, reg2)
+}
+
+fn prepareFOperands(
+  lhs : @types.Name,
+  rhs : @types.Name,
+  reg_allocator : RegAllocator
+) -> (FReg, FReg) {
+  let lhs_location = reg_allocator.stack[lhs]
+  let rhs_location = reg_allocator.stack[rhs]
+  let lhs_memAccess = { base: Sp, offset: lhs_location.unwrap() }
+  riscvs.push(Fld(Ft0, lhs_memAccess))
+  let rhs_memAccess = { base: Sp, offset: rhs_location.unwrap() }
+  riscvs.push(Fld(Ft1, rhs_memAccess))
+  (Ft0, Ft1)
+}
+
 fn prepareArgs(args : Array[@types.Name], reg_allocator : RegAllocator) -> Unit {
   let mut regIndex = 0
   let mut fregIndex = 0
@@ -162,100 +192,52 @@ fn processInstruction(
       reg
     }
     Add(lhs, rhs) => {
-      let reg1 = prepareTempReg(reg_allocator)
-      let reg2 = prepareTempReg(reg_allocator)
-      let lhs_location = reg_allocator.stack[lhs]
-      let rhs_location = reg_allocator.stack[rhs]
-      let lhs_memAccess = { base: Sp, offset: lhs_location.unwrap() }
-      riscvs.push(Lw(reg1, lhs_memAccess))
-      let rhs_memAccess = { base: Sp, offset: rhs_location.unwrap() }
-      riscvs.push(Lw(reg2, rhs_memAccess))
+      let (reg1, reg2) = prepareOperands(lhs, rhs, reg_allocator)
       riscvs.push(Add(reg1, reg1, reg2))
       reg1
     }
     Sub(lhs, rhs) => {
-      let reg1 = prepareTempReg(reg_allocator)
-      let reg2 = prepareTempReg(reg_allocator)
-      let lhs_location = reg_allocator.stack[lhs]
-      let rhs_location = reg_allocator.stack[rhs]
-      let lhs_memAccess = { base: Sp, offset: lhs_location.unwrap() }
-      riscvs.push(Lw(reg1, lhs_memAccess))
-      let rhs_memAccess = { base: Sp, offset: rhs_location.unwrap() }
-      riscvs.push(Lw(reg2, rhs_memAccess))
+      let (reg1, reg2) = prepareOperands(lhs, rhs, reg_allocator)
       riscvs.push(Sub(reg1, reg1, reg2))
       reg1
     }
     Mul(lhs, rhs) => {
-      let reg1 = prepareTempReg(reg_allocator)
-      let reg2 = prepareTempReg(reg_allocator)
-      let lhs_location = reg_allocator.stack[lhs]
-      let rhs_location = reg_allocator.stack[rhs]
-      let lhs_memAccess = { base: Sp, offset: lhs_location.unwrap() }
-      riscvs.push(Lw(reg1, lhs_memAccess))
-      let rhs_memAccess = { base: Sp, offset: rhs_location.unwrap() }
-      riscvs.push(Lw(reg2, rhs_memAccess))
+      let (reg1, reg2) = prepareOperands(lhs, rhs, reg_allocator)
       riscvs.push(Mul(reg1, reg1, reg2))
       reg1
     }
     Div(lhs, rhs) => {
-      let reg1 = prepareTempReg(reg_allocator)
-      let reg2 = prepareTempReg(reg_allocator)
-      let lhs_location = reg_allocator.stack[lhs]
-      let rhs_location = reg_allocator.stack[rhs]
-      let lhs_memAccess = { base: Sp, offset: lhs_location.unwrap() }
-      riscvs.push(Lw(reg1, lhs_memAccess))
-      let rhs_memAccess = { base: Sp, offset: rhs_location.unwrap() }
-      riscvs.push(Lw(reg2, rhs_memAccess))
+      let (reg1, reg2) = prepareOperands(lhs, rhs, reg_allocator)
       riscvs.push(Div(reg1, reg1, reg2))
       T0
     }
     FAdd(lhs, rhs) => {
-      let reg1 = prepareTempReg(reg_allocator)
-      let lhs_location = reg_allocator.stack[lhs]
-      let rhs_location = reg_allocator.stack[rhs]
-      let lhs_memAccess = { base: Sp, offset: lhs_location.unwrap() }
-      riscvs.push(Fld(Ft0, lhs_memAccess))
-      let rhs_memAccess = { base: Sp, offset: rhs_location.unwrap() }
-      riscvs.push(Fld(Ft1, rhs_memAccess))
-      riscvs.push(FaddD(Ft0, Ft0, Ft1))
-      riscvs.push(FmvDX(Ft0, reg1))
-      reg1
+      let temp = prepareTempReg(reg_allocator)
+      let (reg1, reg2) = prepareFOperands(lhs, rhs, reg_allocator)
+      riscvs.push(FaddD(reg1, reg1, reg2))
+      riscvs.push(FmvDX(reg1, temp))
+      temp
     }
     FSub(lhs, rhs) => {
-      let reg1 = prepareTempReg(reg_allocator)
-      let lhs_location = reg_allocator.stack[lhs]
-      let rhs_location = reg_allocator.stack[rhs]
-      let lhs_memAccess = { base: Sp, offset: lhs_location.unwrap() }
-      riscvs.push(Fld(Ft0, lhs_memAccess))
-      let rhs_memAccess = { base: Sp, offset: rhs_location.unwrap() }
-      riscvs.push(Fld(Ft1, rhs_memAccess))
-      riscvs.push(FsubD(Ft0, Ft0, Ft1))
-      riscvs.push(FmvDX(Ft0, reg1))
-      reg1
+      let temp = prepareTempReg(reg_allocator)
+      let (reg1, reg2) = prepareFOperands(lhs, rhs, reg_allocator)
+      riscvs.push(FsubD(reg1, reg1, reg2))
+      riscvs.push(FmvDX(reg1, temp))
+      temp
     }
     FMul(lhs, rhs) => {
-      let reg1 = prepareTempReg(reg_allocator)
-      let lhs_location = reg_allocator.stack[lhs]
-      let rhs_location = reg_allocator.stack[rhs]
-      let lhs_memAccess = { base: Sp, offset: lhs_location.unwrap() }
-      riscvs.push(Fld(Ft0, lhs_memAccess))
-      let rhs_memAccess = { base: Sp, offset: rhs_location.unwrap() }
-      riscvs.push(Fld(Ft1, rhs_memAccess))
-      riscvs.push(FmulD(Ft0, Ft0, Ft1))
-      riscvs.push(FmvDX(Ft0, reg1))
-      reg1
+      let temp = prepareTempReg(reg_allocator)
+      let (reg1, reg2) = prepareFOperands(lhs, rhs, reg_allocator)
+      riscvs.push(FmulD(reg1, reg1, reg2))
+      riscvs.push(FmvDX(reg1, temp))
+      temp
     }
     FDiv(lhs, rhs) => {
-      let reg1 = prepareTempReg(reg_allocator)
-      let lhs_location = reg_allocator.stack[lhs]
-      let rhs_location = reg_allocator.stack[rhs]
-      let lhs_memAccess = { base: Sp, offset: lhs_location.unwrap() }
-      riscvs.push(Fld(Ft0, lhs_memAccess))
-      let rhs_memAccess = { base: Sp, offset: rhs_location.unwrap() }
-      riscvs.push(Fld(Ft1, rhs_memAccess))
-      riscvs.push(FdivD(Ft0, Ft0, Ft1))
-      riscvs.push(FmvDX(Ft0, reg1))
-      reg1
+      let temp = prepareTempReg(reg_allocator)
+      let (reg1, reg2) = prepareFOperands(lhs, rhs, reg_allocator)
+      riscvs.push(FdivD(reg1, reg1, reg2))
+      riscvs.push(FmvDX(reg1, temp))
+      temp
     }
     Neg(var) => {
       let reg1 = prepareTempReg(reg_allocator)

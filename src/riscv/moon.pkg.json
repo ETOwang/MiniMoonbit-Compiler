@@ -9,11 +9,9 @@
     "moonbitlang/minimbt/parser",
     "moonbitlang/minimbt/typing",
     "moonbitlang/minimbt/knf",
-    "moonbitlang/x/fs",
     "lijunchen/unstable_io/env"
   ],
   "test-import": [
-    "moonbitlang/x/fs",
     "moonbitlang/minimbt/parser",
     "moonbitlang/minimbt/lex",
     "moonbitlang/minimbt/typing"
