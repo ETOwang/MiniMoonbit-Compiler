@@ -14,6 +14,10 @@ let varTable : @hashmap.T[@types.Name, @closure.LowType] = @hashmap.new()
 
 let closureTable : @hashmap.T[String, @closure.FuncDef] = @hashmap.new()
 
+let asmData : Array[(String, Double)] = Array::new()
+
+let counter : Array[Int] = Array::new()
+
 fn preProcess(body : @closure.Expr, regAllocator : RegAllocator) -> Int {
   let mut res = 0
   match body {
@@ -22,12 +26,12 @@ fn preProcess(body : @closure.Expr, regAllocator : RegAllocator) -> Int {
         Unit => res += 0
         Int | Bool => {
           regAllocator.stack[lhs.0] = regAllocator.stack_offset
-          regAllocator.stack_offset+=4;
+          regAllocator.stack_offset += 4
           res += 4
         }
         _ => {
           regAllocator.stack[lhs.0] = regAllocator.stack_offset
-          regAllocator.stack_offset+=8;
+          regAllocator.stack_offset += 8
           res += 8
         }
       }
@@ -40,12 +44,12 @@ fn preProcess(body : @closure.Expr, regAllocator : RegAllocator) -> Int {
           Unit => res += 0
           Int | Bool => {
             regAllocator.stack[variable.0] = regAllocator.stack_offset
-            regAllocator.stack_offset+=4;
+            regAllocator.stack_offset += 4
             res += 4
           }
           _ => {
             regAllocator.stack[variable.0] = regAllocator.stack_offset
-            regAllocator.stack_offset+=8;
+            regAllocator.stack_offset += 8
             res += 8
           }
         }
@@ -57,7 +61,6 @@ fn preProcess(body : @closure.Expr, regAllocator : RegAllocator) -> Int {
   }
   res
 }
-
 
 fn prepareArgs(args : Array[@types.Name], reg_allocator : RegAllocator) -> Unit {
   let mut regIndex = 0
@@ -78,7 +81,7 @@ fn prepareArgs(args : Array[@types.Name], reg_allocator : RegAllocator) -> Unit 
         riscvs.push(Fld(freg_arg_list[fregIndex], arg_memAccess))
         fregIndex += 1
       }
-      _=>{
+      _ => {
         reg_allocator.used_regs[arg] = reg_arg_list[regIndex]
         riscvs.push(Ld(reg_arg_list[regIndex], arg_memAccess))
         regIndex += 1
@@ -150,8 +153,12 @@ fn processInstruction(
       reg
     }
     Double(value) => {
+      asmData.push(("double_" + counter[0].to_string(), value))
       let reg = prepareTempReg(reg_allocator)
-      riscvs.push(Li(reg, value.to_string()))
+      riscvs.push(La(reg, "double_" + counter[0].to_string()))
+      riscvs.push(Fld(Ft0, { base: reg, offset: 0 }))
+      riscvs.push(FmvDX(Ft0, reg))
+      counter[0] += 1
       reg
     }
     Add(lhs, rhs) => {
@@ -270,10 +277,7 @@ fn processInstruction(
     Let((var, ty), rhs, rest) => {
       let rhs_reg = processInstruction(rhs, reg_allocator)
       match ty {
-        Unit => {
-          println("here")
-          processInstruction(rest, reg_allocator)
-        }
+        Unit => processInstruction(rest, reg_allocator)
         _ => {
           varTable[var] = ty
           let var_memAccess = {
@@ -377,9 +381,19 @@ fn processFunction(
   reg_allocator : RegAllocator
 ) -> AssemblyFunction {
   let res = if funtion.name._ == "minimbt_main" {
-    { name: funtion.name._, export: true, body: Array::new() }
+    {
+      name: funtion.name._,
+      export: true,
+      body: Array::new(),
+      data: Array::new(),
+    }
   } else {
-    { name: funtion.name._, export: false, body: Array::new() }
+    {
+      name: funtion.name._,
+      export: false,
+      body: Array::new(),
+      data: Array::new(),
+    }
   }
   let stackSize : Int = preProcess(funtion.body, reg_allocator)
   res.body.push(Addi(Sp, Sp, -stackSize))
@@ -397,12 +411,21 @@ pub struct AssemblyFunction {
   name : String
   export : Bool
   body : Array[RvAsm]
+  mut data : Array[(String, Double)]
 }
 
 pub fn AssemblyFunction::output(
   self : AssemblyFunction,
   logger : Logger
 ) -> Unit {
+  if self.name == "minimbt_main" {
+    logger.write_string(".data:\n")
+    for label in self.data {
+      logger.write_string("\{label.0}: .double \{label.1.to_string()}\n")
+    }
+    logger.write_string("\n")
+    logger.write_string(".text:\n")
+  }
   let name = self.name
   if self.export {
     logger.write_string(".global \{name}\n")
@@ -415,6 +438,7 @@ pub fn AssemblyFunction::output(
 }
 
 pub fn emit(input : @closure.Program) -> Array[AssemblyFunction] {
+  counter.push(0)
   let res = Array::new()
   for fun in input.fundefs {
     if fun.is_closure {
@@ -432,6 +456,11 @@ pub fn emit(input : @closure.Program) -> Array[AssemblyFunction] {
       temp_index: 0,
     }
     res.push(processFunction(fun, regAllocator))
+  }
+  for func in res {
+    if func.name == "minimbt_main" {
+      func.data = asmData
+    }
   }
   res
 }
