@@ -768,9 +768,14 @@ pub fn KnfEnv::to_knf(self : KnfEnv, s : @types.Syntax) -> Knf {
         insert_let(
           self,
           ka,
-          Type::Int,
+          Type::Double,
           fn(x : Name) -> Knf {
-            insert_let(self, kb, Type::Int, fn(y : Name) -> Knf { FSub(x, y) })
+            insert_let(
+              self,
+              kb,
+              Type::Double,
+              fn(y : Name) -> Knf { FSub(x, y) },
+            )
           },
         )
       } else if op == @types.Op::Mul && k == Some(@types.Kind::Int) {
@@ -820,9 +825,14 @@ pub fn KnfEnv::to_knf(self : KnfEnv, s : @types.Syntax) -> Knf {
         insert_let(
           self,
           ka,
-          Type::Int,
+          Type::Double,
           fn(x : Name) -> Knf {
-            insert_let(self, kb, Type::Int, fn(y : Name) -> Knf { FMul(x, y) })
+            insert_let(
+              self,
+              kb,
+              Type::Double,
+              fn(y : Name) -> Knf { FMul(x, y) },
+            )
           },
         )
       } else if op == @types.Op::Div && k == Some(@types.Kind::Int) {
@@ -872,9 +882,14 @@ pub fn KnfEnv::to_knf(self : KnfEnv, s : @types.Syntax) -> Knf {
         insert_let(
           self,
           ka,
-          Type::Int,
+          Type::Double,
           fn(x : Name) -> Knf {
-            insert_let(self, kb, Type::Int, fn(y : Name) -> Knf { FDiv(x, y) })
+            insert_let(
+              self,
+              kb,
+              Type::Double,
+              fn(y : Name) -> Knf { FDiv(x, y) },
+            )
           },
         )
       } else {

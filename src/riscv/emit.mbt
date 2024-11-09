@@ -280,13 +280,22 @@ fn processInstruction(
       let rhs_reg = processInstruction(rhs, reg_allocator)
       match ty {
         Unit => processInstruction(rest, reg_allocator)
-        _ => {
+        Int => {
           varTable[var] = ty
           let var_memAccess = {
             base: Sp,
             offset: reg_allocator.stack[var].unwrap(),
           }
           riscvs.push(Sw(rhs_reg, var_memAccess))
+          processInstruction(rest, reg_allocator)
+        }
+        _ => {
+          varTable[var] = ty
+          let var_memAccess = {
+            base: Sp,
+            offset: reg_allocator.stack[var].unwrap(),
+          }
+          riscvs.push(Sd(rhs_reg, var_memAccess))
           processInstruction(rest, reg_allocator)
         }
       }
@@ -362,7 +371,11 @@ fn processInstruction(
     }
     CallDirect(label, args) => {
       prepareArgs(args, reg_allocator)
+      riscvs.push(Addi(Sp, Sp, -8))
+      riscvs.push(Sd(Ra, { base: Sp, offset: 0 }))
       riscvs.push(Call(label._))
+      riscvs.push(Ld(Ra, { base: Sp, offset: 0 }))
+      riscvs.push(Addi(Sp, Sp, 8))
       reg_ret
     }
     CallClosure(closure, args) => {
@@ -372,7 +385,11 @@ fn processInstruction(
         args.push(fv.0)
       }
       prepareArgs(args, registerTable[funcdef.name._].unwrap())
+      riscvs.push(Addi(Sp, Sp, -8))
+      riscvs.push(Sd(Ra, { base: Sp, offset: 0 }))
       riscvs.push(Call(closure.to_string()))
+      riscvs.push(Ld(Ra, { base: Sp, offset: 0 }))
+      riscvs.push(Addi(Sp, Sp, 8))
       reg_ret
     }
   }
