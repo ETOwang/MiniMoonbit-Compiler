@@ -8,6 +8,26 @@ pub struct RegAllocator {
   mut temp_index : Int
 }
 
+pub let extenv : Map[String, @types.Type] = {
+  "minimbt_read_int": Int,
+  "minimbt_print_int": Unit,
+  "minimbt_read_char": Int,
+  "minimbt_print_char": Unit,
+  "minimbt_print_newline": Unit,
+  "minimbt_create_array": @types.Type::Array(Int),
+  "minimbt_create_float_array": @types.Type::Array(Double),
+  "minimbt_create_ptr_array": @types.Type::Array(Ptr),
+  "minimbt_truncate": Int,
+  "minimbt_sin": Double,
+  "minimbt_cos": Double,
+  "minimbt_sqrt": Double,
+  "minimbt_abs_float": Double,
+  "minimbt_int_of_float": Int,
+  "minimbt_float_of_int": Double,
+  "minimbt_atan": Double,
+  "minimbt_floor": Double,
+}
+
 let riscvs : Array[RvAsm] = Array::new()
 
 let varTable : @hashmap.T[@types.Name, @closure.LowType] = @hashmap.new()
@@ -18,7 +38,31 @@ let asmData : Array[(String, Double)] = Array::new()
 
 let counter : Array[Int] = Array::new()
 
+let end_counter : Array[Int] = Array::new()
+
+let if_counter : Array[Int] = Array::new()
+
+let else_counter : Array[Int] = Array::new()
+
 let registerTable : @hashmap.T[String, RegAllocator] = @hashmap.new()
+
+fn create_label_else() -> String {
+  let temp = "else_" + else_counter[0].to_string()
+  else_counter[0] += 1
+  temp
+}
+
+fn create_label_end() -> String {
+  let temp = "end_" + end_counter[0].to_string()
+  end_counter[0] += 1
+  temp
+}
+
+fn create_label_if() -> String {
+  let temp = "if_" + if_counter[0].to_string()
+  if_counter[0] += 1
+  temp
+}
 
 fn preProcess(body : @closure.Expr, regAllocator : RegAllocator) -> Int {
   let mut res = 0
@@ -301,33 +345,37 @@ fn processInstruction(
       }
     }
     IfEq(lhs, rhs, then, els) => {
+      let else_label = create_label_else()
+      let end_label = create_label_end()
       let lhs_location = reg_allocator.stack[lhs]
       let rhs_location = reg_allocator.stack[rhs]
       let lhs_memAccess = { base: Sp, offset: lhs_location.unwrap() }
       riscvs.push(Lw(T0, lhs_memAccess))
       let rhs_memAccess = { base: Sp, offset: rhs_location.unwrap() }
       riscvs.push(Lw(T1, rhs_memAccess))
-      riscvs.push(Beq(T0, T1, "else"))
+      riscvs.push(Beq(T0, T1, else_label))
       let _ = processInstruction(then, reg_allocator)
-      riscvs.push(J("end"))
-      riscvs.push(Label("else"))
+      riscvs.push(J(end_label))
+      riscvs.push(Label(else_label))
       let elseResult = processInstruction(els, reg_allocator)
-      riscvs.push(Label("end"))
+      riscvs.push(Label(end_label))
       elseResult
     }
     IfLe(lhs, rhs, then, els) => {
+      let else_label = create_label_else()
+      let end_label = create_label_end()
       let lhs_location = reg_allocator.stack[lhs]
       let rhs_location = reg_allocator.stack[rhs]
       let lhs_memAccess = { base: Sp, offset: lhs_location.unwrap() }
       riscvs.push(Lw(T0, lhs_memAccess))
       let rhs_memAccess = { base: Sp, offset: rhs_location.unwrap() }
       riscvs.push(Lw(T1, rhs_memAccess))
-      riscvs.push(Blt(T0, T1, "else"))
+      riscvs.push(Blt(T0, T1, else_label))
       let _ = processInstruction(then, reg_allocator)
-      riscvs.push(J("end"))
-      riscvs.push(Label("else"))
+      riscvs.push(J(end_label))
+      riscvs.push(Label(else_label))
       let elseResult = processInstruction(els, reg_allocator)
-      riscvs.push(Label("end"))
+      riscvs.push(Label(end_label))
       elseResult
     }
     Var(var) => {
@@ -376,7 +424,14 @@ fn processInstruction(
       riscvs.push(Call(label._))
       riscvs.push(Ld(Ra, { base: Sp, offset: 0 }))
       riscvs.push(Addi(Sp, Sp, 8))
-      reg_ret
+      match extenv[label._].unwrap() {
+        Int(_) => reg_ret
+        Double(_) => {
+          riscvs.push(FmvDX(freg_ret, reg_ret))
+          reg_ret
+        }
+        _ => reg_ret
+      }
     }
     CallClosure(closure, args) => {
       //TODO:FuncPtr
@@ -456,6 +511,9 @@ pub fn AssemblyFunction::output(
 
 pub fn emit(input : @closure.Program) -> Array[AssemblyFunction] {
   counter.push(0)
+  end_counter.push(0)
+  if_counter.push(0)
+  else_counter.push(0)
   let res = Array::new()
   for fun in input.fundefs {
     if fun.is_closure {
