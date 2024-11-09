@@ -18,6 +18,8 @@ let asmData : Array[(String, Double)] = Array::new()
 
 let counter : Array[Int] = Array::new()
 
+let registerTable : @hashmap.T[String, RegAllocator] = @hashmap.new()
+
 fn preProcess(body : @closure.Expr, regAllocator : RegAllocator) -> Int {
   let mut res = 0
   match body {
@@ -67,14 +69,22 @@ fn prepareOperands(
   rhs : @types.Name,
   reg_allocator : RegAllocator
 ) -> (Reg, Reg) {
-  let reg1 = prepareTempReg(reg_allocator)
-  let reg2 = prepareTempReg(reg_allocator)
   let lhs_location = reg_allocator.stack[lhs]
   let rhs_location = reg_allocator.stack[rhs]
-  let lhs_memAccess = { base: Sp, offset: lhs_location.unwrap() }
-  riscvs.push(Lw(reg1, lhs_memAccess))
-  let rhs_memAccess = { base: Sp, offset: rhs_location.unwrap() }
-  riscvs.push(Lw(reg2, rhs_memAccess))
+  let mut reg1 = prepareTempReg(reg_allocator)
+  let mut reg2 = prepareTempReg(reg_allocator)
+  if lhs_location.is_empty() {
+    reg1 = reg_allocator.used_regs[lhs].unwrap()
+  } else {
+    let lhs_memAccess = { base: Sp, offset: lhs_location.unwrap() }
+    riscvs.push(Lw(reg1, lhs_memAccess))
+  }
+  if rhs_location.is_empty() {
+    reg2 = reg_allocator.used_regs[rhs].unwrap()
+  } else {
+    let rhs_memAccess = { base: Sp, offset: rhs_location.unwrap() }
+    riscvs.push(Lw(reg2, rhs_memAccess))
+  }
   (reg1, reg2)
 }
 
@@ -83,13 +93,23 @@ fn prepareFOperands(
   rhs : @types.Name,
   reg_allocator : RegAllocator
 ) -> (FReg, FReg) {
+  let mut reg1 = Ft0
+  let mut reg2 = Ft1
   let lhs_location = reg_allocator.stack[lhs]
   let rhs_location = reg_allocator.stack[rhs]
-  let lhs_memAccess = { base: Sp, offset: lhs_location.unwrap() }
-  riscvs.push(Fld(Ft0, lhs_memAccess))
-  let rhs_memAccess = { base: Sp, offset: rhs_location.unwrap() }
-  riscvs.push(Fld(Ft1, rhs_memAccess))
-  (Ft0, Ft1)
+  if lhs_location.is_empty() {
+    reg1 = reg_allocator.used_fregs[lhs].unwrap()
+  } else {
+    let lhs_memAccess = { base: Sp, offset: lhs_location.unwrap() }
+    riscvs.push(Fld(Ft0, lhs_memAccess))
+  }
+  if rhs_location.is_empty() {
+    reg2 = reg_allocator.used_fregs[rhs].unwrap()
+  } else {
+    let rhs_memAccess = { base: Sp, offset: rhs_location.unwrap() }
+    riscvs.push(Fld(Ft1, rhs_memAccess))
+  }
+  (reg1, reg2)
 }
 
 fn prepareArgs(args : Array[@types.Name], reg_allocator : RegAllocator) -> Unit {
@@ -341,17 +361,17 @@ fn processInstruction(
       T1
     }
     CallDirect(label, args) => {
-      //TODO:FuncPtr
       prepareArgs(args, reg_allocator)
       riscvs.push(Call(label._))
       reg_ret
     }
     CallClosure(closure, args) => {
+      //TODO:FuncPtr
       let funcdef = closureTable[closure.to_string()].unwrap()
       for fv in funcdef.formal_free_vars {
         args.push(fv.0)
       }
-      prepareArgs(args, reg_allocator)
+      prepareArgs(args, registerTable[funcdef.name._].unwrap())
       riscvs.push(Call(closure.to_string()))
       reg_ret
     }
@@ -401,12 +421,10 @@ pub fn AssemblyFunction::output(
   logger : Logger
 ) -> Unit {
   if self.name == "minimbt_main" {
-    logger.write_string(".data:\n")
     for label in self.data {
       logger.write_string("\{label.0}: .double \{label.1.to_string()}\n")
     }
     logger.write_string("\n")
-    logger.write_string(".text:\n")
   }
   let name = self.name
   if self.export {
@@ -437,7 +455,10 @@ pub fn emit(input : @closure.Program) -> Array[AssemblyFunction] {
       stack_offset: 0,
       temp_index: 0,
     }
-    res.push(processFunction(fun, regAllocator))
+    registerTable[fun.name._] = regAllocator
+  }
+  for fun in input.fundefs {
+    res.push(processFunction(fun, registerTable[fun.name._].unwrap()))
   }
   for func in res {
     if func.name == "minimbt_main" {
