@@ -156,12 +156,12 @@ fn prepareFOperands(
   (reg1, reg2)
 }
 
-fn prepareArgs(args : Array[@types.Name], reg_allocator : RegAllocator) -> Unit {
+fn prepareArgs(args : Array[@types.Name], initial:RegAllocator,reg_allocator : RegAllocator) -> Unit {
   let mut regIndex = 0
   let mut fregIndex = 0
   for index = 0; index < args.length(); index = index + 1 {
     let arg = args[index]
-    let arg_location = reg_allocator.stack[arg]
+    let arg_location = initial.stack[arg]
     let arg_memAccess = { base: Sp, offset: arg_location.unwrap() }
     let arg_type = varTable[arg]
     match arg_type.unwrap() {
@@ -418,7 +418,7 @@ fn processInstruction(
       T1
     }
     CallDirect(label, args) => {
-      prepareArgs(args, reg_allocator)
+      prepareArgs(args, reg_allocator,reg_allocator)
       riscvs.push(Addi(Sp, Sp, -8))
       riscvs.push(Sd(Ra, { base: Sp, offset: 0 }))
       riscvs.push(Call(label._))
@@ -439,7 +439,7 @@ fn processInstruction(
       for fv in funcdef.formal_free_vars {
         args.push(fv.0)
       }
-      prepareArgs(args, registerTable[funcdef.name._].unwrap())
+      prepareArgs(args, reg_allocator,registerTable[funcdef.name._].unwrap())
       riscvs.push(Addi(Sp, Sp, -8))
       riscvs.push(Sd(Ra, { base: Sp, offset: 0 }))
       riscvs.push(Call(closure.to_string()))
