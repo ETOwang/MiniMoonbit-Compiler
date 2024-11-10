@@ -66,6 +66,7 @@ pub enum RvAsm {
   FbeqD(FReg, FReg, Label)
   FbleD(FReg, FReg, Label)
   FmvDX(FReg, Reg)
+  FmvXD(Reg, FReg)
   // pseudo instructions
   Nop
   La(Reg, Label)
@@ -227,6 +228,7 @@ impl Show for RvAsm with output(self, logger) {
     FbeqD(rs1, rs2, label) => write2label(logger, "fbeq.d", rs1, rs2, label)
     FbleD(rs1, rs2, label) => write2label(logger, "fble.d", rs1, rs2, label)
     FmvDX(rd, rs1) => write2(logger, "fmv.d.x", rd, rs1)
+    FmvXD(rd, rs1) => write2(logger, "fmv.x.d", rd, rs1)
     Nop => logger.write_string("nop")
     La(rd, label) => {
       logger.write_string("la ")

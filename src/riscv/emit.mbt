@@ -247,12 +247,20 @@ fn processInstruction(
       reg
     }
     Double(value) => {
-      asmData.push(("double_" + counter[0].to_string(), value))
+      // asmData.push(("double_" + counter[0].to_string(), value))
+      // let reg = prepareTempReg(reg_allocator)
+      // riscvs.push(La(reg, "double_" + counter[0].to_string()))
+      // riscvs.push(Fld(Ft0, { base: reg, offset: 0 }))
+      // riscvs.push(FmvDX(Ft0, reg))
+      // counter[0] += 1
       let reg = prepareTempReg(reg_allocator)
-      riscvs.push(La(reg, "double_" + counter[0].to_string()))
-      riscvs.push(Fld(Ft0, { base: reg, offset: 0 }))
-      riscvs.push(FmvDX(Ft0, reg))
-      counter[0] += 1
+      let temp=prepareTempReg(reg_allocator)
+      let high=(value.reinterpret_as_uint64()>>32).to_uint()
+      let low=((value.reinterpret_as_uint64()<<32)>>32).to_uint()
+      riscvs.push(Li(reg,high.to_string()))
+     riscvs.push(Slli(reg,reg,32))
+      riscvs.push(Li(temp,low.to_string()))
+      riscvs.push(Or(reg,reg,temp))
       reg
     }
     Add(lhs, rhs) => {
@@ -279,28 +287,28 @@ fn processInstruction(
       let temp = prepareTempReg(reg_allocator)
       let (reg1, reg2) = prepareFOperands(lhs, rhs, reg_allocator)
       riscvs.push(FaddD(reg1, reg1, reg2))
-      riscvs.push(FmvDX(reg1, temp))
+      riscvs.push(FmvXD(temp, reg1))
       temp
     }
     FSub(lhs, rhs) => {
       let temp = prepareTempReg(reg_allocator)
       let (reg1, reg2) = prepareFOperands(lhs, rhs, reg_allocator)
       riscvs.push(FsubD(reg1, reg1, reg2))
-      riscvs.push(FmvDX(reg1, temp))
+      riscvs.push(FmvXD(temp, reg1))
       temp
     }
     FMul(lhs, rhs) => {
       let temp = prepareTempReg(reg_allocator)
       let (reg1, reg2) = prepareFOperands(lhs, rhs, reg_allocator)
       riscvs.push(FmulD(reg1, reg1, reg2))
-      riscvs.push(FmvDX(reg1, temp))
+      riscvs.push(FmvXD(temp, reg1))
       temp
     }
     FDiv(lhs, rhs) => {
       let temp = prepareTempReg(reg_allocator)
       let (reg1, reg2) = prepareFOperands(lhs, rhs, reg_allocator)
       riscvs.push(FdivD(reg1, reg1, reg2))
-      riscvs.push(FmvDX(reg1, temp))
+      riscvs.push(FmvXD(temp, reg1))
       temp
     }
     Neg(var) => {
@@ -317,7 +325,7 @@ fn processInstruction(
       let var_memAccess = { base: Sp, offset: var_location.unwrap() }
       riscvs.push(Fld(Ft0, var_memAccess))
       riscvs.push(FnegD(Ft0, Ft0))
-      riscvs.push(FmvDX(Ft0, reg1))
+      riscvs.push(FmvXD(reg1, Ft0))
       reg1
     }
     Let((var, ty), rhs, rest) => {
@@ -370,7 +378,7 @@ fn processInstruction(
       riscvs.push(Lw(T0, lhs_memAccess))
       let rhs_memAccess = { base: Sp, offset: rhs_location.unwrap() }
       riscvs.push(Lw(T1, rhs_memAccess))
-      riscvs.push(Blt(T0, T1, else_label))
+      riscvs.push(Blt(T1, T0, else_label))
       let _ = processInstruction(then, reg_allocator)
       riscvs.push(J(end_label))
       riscvs.push(Label(else_label))
@@ -427,7 +435,7 @@ fn processInstruction(
       match extenv[label._].unwrap() {
         Int(_) => reg_ret
         Double(_) => {
-          riscvs.push(FmvDX(freg_ret, reg_ret))
+          riscvs.push(FmvXD(reg_ret, freg_ret))
           reg_ret
         }
         _ => reg_ret
@@ -492,12 +500,7 @@ pub fn AssemblyFunction::output(
   self : AssemblyFunction,
   logger : Logger
 ) -> Unit {
-  if self.name == "minimbt_main" {
-    for label in self.data {
-      logger.write_string("\{label.0}: .double \{label.1.to_string()}\n")
-    }
-    logger.write_string("\n")
-  }
+  
   let name = self.name
   if self.export {
     logger.write_string(".global \{name}\n")
@@ -506,6 +509,15 @@ pub fn AssemblyFunction::output(
   for asm in self.body {
     Show::output(asm, logger)
     logger.write_string("\n")
+  }
+  if self.name == "minimbt_main" {
+    for label in self.data {
+      logger.write_string(".global ")
+      logger.write_string("\{label.0}\n")
+      logger.write_string("\{label.0}: .double \{label.1.to_string()}\n")
+    }
+    logger.write_string("\n")
+
   }
 }
 
