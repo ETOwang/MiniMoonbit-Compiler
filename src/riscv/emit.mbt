@@ -58,12 +58,6 @@ fn create_label_end() -> String {
   temp
 }
 
-fn create_label_if() -> String {
-  let temp = "if_" + if_counter[0].to_string()
-  if_counter[0] += 1
-  temp
-}
-
 fn preProcess(body : @closure.Expr, regAllocator : RegAllocator) -> Int {
   let mut res = 0
   match body {
@@ -125,7 +119,10 @@ fn prepareOperand(expr : @types.Name, reg_allocator : RegAllocator) -> Reg {
     reg1 = reg_allocator.used_regs[expr].unwrap()
   } else {
     let lhs_memAccess = { base: Sp, offset: lhs_location.unwrap() }
-    riscvs.push(Lw(reg1, lhs_memAccess))
+    match varTable[expr].unwrap() {
+      Int(_) => riscvs.push(Lw(reg1, lhs_memAccess))
+      _ => riscvs.push(Ld(reg1, lhs_memAccess))
+    }
   }
   reg1
 }
@@ -232,6 +229,25 @@ fn prepareTempReg(reg_allocator : RegAllocator) -> Reg {
   temp_reg
 }
 
+fn callMalloc(size : Int) -> Unit {
+  riscvs.push(Li(A0, size.to_string()))
+  riscvs.push(Addi(Sp, Sp, -8))
+  riscvs.push(Sd(Ra, { base: Sp, offset: 0 }))
+  riscvs.push(Call("minimbt_malloc"))
+  riscvs.push(Ld(Ra, { base: Sp, offset: 0 }))
+  riscvs.push(Addi(Sp, Sp, 8))
+}
+
+fn callCreatePtrArray(size : Int) -> Unit {
+  riscvs.push(Li(A0, size.to_string()))
+  riscvs.push(Li(A1, "0"))
+  riscvs.push(Addi(Sp, Sp, -8))
+  riscvs.push(Sd(Ra, { base: Sp, offset: 0 }))
+  riscvs.push(Call("minimbt_create_ptr_array"))
+  riscvs.push(Ld(Ra, { base: Sp, offset: 0 }))
+  riscvs.push(Addi(Sp, Sp, 8))
+}
+
 fn processInstruction(
   expr : @closure.Expr,
   reg_allocator : RegAllocator
@@ -240,24 +256,54 @@ fn processInstruction(
     //TODO
     Unit => T0
     MakeTuple(vars) => {
-      let mut res = 0
-      for var in vars {
-        let var_location = reg_allocator.stack[var]
-        let var_memAccess = { base: Sp, offset: var_location.unwrap() }
-        riscvs.push(Ld(T0, var_memAccess))
-        let tuple_location = { base: Sp, offset: res }
-        riscvs.push(Sd(T0, tuple_location))
-        res += 4
+      callCreatePtrArray(vars.length())
+      //todo:t3
+      riscvs.push(Mv(T3, A0))
+      for index = 0; index < vars.length(); index = index + 1 {
+        let var = vars[index]
+        match varTable[var].unwrap() {
+          Int(_) => {
+            callMalloc(4)
+            let temp = prepareOperand(var, reg_allocator)
+            riscvs.push(Sw(temp, { base: A0, offset: 0 }))
+            riscvs.push(Sd(A0, { base: T3, offset: 8 * index }))
+          }
+          Double(_) => {
+            callMalloc(8)
+            let temp = prepareFOperand(var, reg_allocator)
+            riscvs.push(Fsd(temp, { base: A0, offset: 0 }))
+            riscvs.push(Sd(A0, { base: T3, offset: 8 * index }))
+          }
+          _ => {
+            callMalloc(8)
+            let temp = prepareOperand(var, reg_allocator)
+            riscvs.push(Sd(temp, { base: A0, offset: 0 }))
+            riscvs.push(Sd(A0, { base: T3, offset: 8 * index }))
+          }
+        }
       }
-      T0
+      T3
     }
-    LetTuple(vars, _, rest) => {
-      for var in vars {
+    LetTuple(vars, tuple, rest) => {
+      let tuple_reg = prepareOperand(tuple, reg_allocator)
+      for index = 0; index < vars.length(); index = index + 1 {
+        let var = vars[index]
         let var_location = reg_allocator.stack[var.0]
         let var_memAccess = { base: Sp, offset: var_location.unwrap() }
-        riscvs.push(Ld(T0, var_memAccess))
-        let tuple_location = { base: Sp, offset: 0 }
-        riscvs.push(Sd(T0, tuple_location))
+        match var.1 {
+          Int(_) => {
+            let temp = prepareTempReg(reg_allocator)
+            riscvs.push(Ld(temp, { base: tuple_reg, offset: 8 * index }))
+            riscvs.push(Lw(temp, { base: temp, offset: 0 }))
+            riscvs.push(Sw(temp, var_memAccess))
+          }
+          _ => {
+            let temp = prepareTempReg(reg_allocator)
+            riscvs.push(Ld(temp, { base: tuple_reg, offset: 8 * index }))
+            riscvs.push(Ld(temp, { base: temp, offset: 0 }))
+            riscvs.push(Sd(temp, var_memAccess))
+          }
+        }
       }
       processInstruction(rest, reg_allocator)
     }
@@ -495,6 +541,8 @@ fn processInstruction(
       }
     }
     CallClosure(closure, args) => {
+      println("closure")
+      println(args)
       //TODO:FuncPtr
       let funcdef = closureTable[closure.to_string()].unwrap()
       let flag = for ag in funcdef.args {
@@ -520,6 +568,8 @@ fn processInstruction(
       riscvs.push(Call(closure.to_string()))
       riscvs.push(Ld(Ra, { base: Sp, offset: 0 }))
       riscvs.push(Addi(Sp, Sp, 8))
+      println(args)
+      println("closure")
       reg_ret
     }
   }

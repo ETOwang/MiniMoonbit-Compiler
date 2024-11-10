@@ -194,7 +194,32 @@ pub fn get_knf_type(self : KnfEnv, knf : Knf) -> Type {
     Knf::Get(array, _) => getTypeFromName(self, array) // 假设 Get 返回 Int 类型
     Knf::Put(_, e2, e3) => getTypeFromName(self, e3) // 假设 Put 返回 Unit 类型
     Knf::ExternalArray(_) => Type::Array(Type::Int)
-    Knf::ExternalFunctionApplication(_, _) => Type::Unit
+    Knf::ExternalFunctionApplication(name, _) =>  {
+      if name == "minimbt_create_array" {
+        Type::Array(Type::Int)
+      } else if name == "minimbt_create_float_array" {
+        Type::Array(Type::Double)
+      } else if name == "minimbt_create_ptr_array" {
+        Type::Array(Type::Ptr)
+      } else if name == "minimbt_truncate" {
+        Type::Int
+      } else if name == "minimbt_sin" {
+        Type::Double
+      } else if name == "minimbt_cos" {
+        Type::Double
+      } else if name == "minimbt_sqrt" {
+        Type::Double
+      } else if name == "minimbt_abs_float" {
+        Type::Double
+      } else if name == "minimbt_int_of_float" {
+        Type::Int
+      } else if name == "minimbt_float_of_int" {
+        Type::Double
+      } else {
+        println("Type not found5")
+        abort("External function not found")
+      }
+    }
     // 可以添加更多变体的处理...
   }
 }
@@ -754,9 +779,9 @@ pub fn KnfEnv::to_knf(self : KnfEnv, s : @types.Syntax) -> Knf {
         insert_let(
           self,
           ka,
-          Type::Int,
+          Type::Double,
           fn(x : Name) -> Knf {
-            insert_let(self, kb, Type::Int, fn(y : Name) -> Knf { FSub(x, y) })
+            insert_let(self, kb, Type::Double, fn(y : Name) -> Knf { FSub(x, y) })
           },
         )
       } else if op == @types.Op::Mul && k == Some(@types.Kind::Int) {
@@ -806,9 +831,9 @@ pub fn KnfEnv::to_knf(self : KnfEnv, s : @types.Syntax) -> Knf {
         insert_let(
           self,
           ka,
-          Type::Int,
+          Type::Double,
           fn(x : Name) -> Knf {
-            insert_let(self, kb, Type::Int, fn(y : Name) -> Knf { FMul(x, y) })
+            insert_let(self, kb, Type::Double, fn(y : Name) -> Knf { FMul(x, y) })
           },
         )
       } else if op == @types.Op::Div && k == Some(@types.Kind::Int) {
@@ -858,9 +883,9 @@ pub fn KnfEnv::to_knf(self : KnfEnv, s : @types.Syntax) -> Knf {
         insert_let(
           self,
           ka,
-          Type::Int,
+          Type::Double,
           fn(x : Name) -> Knf {
-            insert_let(self, kb, Type::Int, fn(y : Name) -> Knf { FDiv(x, y) })
+            insert_let(self, kb, Type::Double, fn(y : Name) -> Knf { FDiv(x, y) })
           },
         )
       } else {
