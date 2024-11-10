@@ -21,7 +21,7 @@
 // }
 
 // test {
-//   let input = @fs.read_file_to_string!(path="test/test_src/shuffle.mbt")
+//   let input = @fs.read_file_to_string!(path="test/test_src/join-stack.mbt")
 //   let context = @parser.parse(input)
 //   let typechecked = @typing.typing!(context)
 //   println(typechecked)
@@ -39,6 +39,47 @@
 //   let asm = emit(closure_ir)
 //   println(print_functions(asm))
 // }
+// // fundefs: [{name: Label("minimbt_main"), 
+// // old_name: minimbt_main, 
+// // is_closure: true, 
+// // ty: ClosureFn([], Unit), 
+// // args: [], 
+// // formal_free_vars: [(_1, ClosureFn([Unit], Int)), (_202, ClosureFn([Unit], Int)), (_403, ClosureFn([Unit], Int))], 
+// // body: Let((_607, Int), 
+// // Let((_606, Unit), Unit, CallClosure(_1, [_606])), 
+// // Let((_609, Int), 
+// // Let((_608, Unit), Unit, CallClosure(_202, [_608])), 
+// // Let((_617, Int), 
+// // Let((_616, Int), 
+// // Let((_615, Int), 
+// // Let((_613, Int), 
+// // Let((_610, Unit), Unit, CallClosure(_403, [_610])), 
+// // Let((_614, Int), Int(0),
+// //  IfEq(_613, _614, 
+// //  Let((_611, Int), Int(1), Add(_607, _611)), 
+// //  Let((_612, Int), Int(2), Add(_609, _612))))),
+// //   Add(_615, _607)), 
+// //   Add(_616, _609)), 
+// //   CallDirect(Label("minimbt_print_int"), [_617]))))},
+// //    {name: Label("_403"),
+// //     old_name: _403, 
+// //     is_closure: true, 
+// //     ty: ClosureFn([Unit], Int), 
+// //     args: [(_405, Unit)], 
+// //     formal_free_vars: [], 
+// //     body: Int(789)}, 
+// //     {name: Label("_202"), 
+// //     old_name: _202, 
+// //     is_closure: true, 
+// //     ty: ClosureFn([Unit], Int),
+// //      args: [(_204, Unit)],
+// //       formal_free_vars: [],
+// //        body: Int(456)}, 
+// //        {name: Label("_1"), 
+// //        old_name: _1, 
+// //        is_closure: true, 
+// //        ty: ClosureFn([Unit], Int), 
+// //        args: [(_3, Unit)], formal_free_vars: [], body: Int(123)}], 
 // // {fundefs: [{name: Label("minimbt_main"), 
 // // old_name: minimbt_main, 
 // // is_closure: true, 

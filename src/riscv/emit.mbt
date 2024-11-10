@@ -225,7 +225,7 @@ fn prepareArgs(
 }
 
 fn prepareTempReg(reg_allocator : RegAllocator) -> Reg {
-  let temp_list=[T0,T1,T2]
+  let temp_list = [T0, T1, T2]
   let temp_reg = temp_list[reg_allocator.temp_index]
   reg_allocator.temp_index += 1
   reg_allocator.temp_index %= temp_list.length()
@@ -362,6 +362,7 @@ fn processInstruction(
       reg1
     }
     Let((var, ty), rhs, rest) => {
+      println(var)
       let rhs_reg = processInstruction(rhs, reg_allocator)
       match ty {
         Unit => processInstruction(rest, reg_allocator)
@@ -388,7 +389,7 @@ fn processInstruction(
     IfEq(lhs, rhs, then, els) => {
       let else_label = create_label_else()
       let end_label = create_label_end()
-       let temp_reg=prepareTempReg(reg_allocator)
+      let temp_reg = prepareTempReg(reg_allocator)
       let (reg1, reg2) = prepareOperands(lhs, rhs, reg_allocator)
       riscvs.push(Bne(reg1, reg2, else_label))
       let ret_reg = processInstruction(then, reg_allocator)
@@ -404,7 +405,7 @@ fn processInstruction(
     IfLe(lhs, rhs, then, els) => {
       let else_label = create_label_else()
       let end_label = create_label_end()
-      let temp_reg=prepareTempReg(reg_allocator)
+      let temp_reg = prepareTempReg(reg_allocator)
       let (reg1, reg2) = prepareOperands(lhs, rhs, reg_allocator)
       riscvs.push(Blt(reg2, reg1, else_label))
       let ret_reg = processInstruction(then, reg_allocator)
@@ -496,14 +497,24 @@ fn processInstruction(
     CallClosure(closure, args) => {
       //TODO:FuncPtr
       let funcdef = closureTable[closure.to_string()].unwrap()
-      prepareArgs(
-        args,
-        reg_allocator,
-        registerTable[funcdef.name._].unwrap(),
-        closureTable[closure.to_string()].unwrap().args.map(
-          fn(name_ty) { name_ty.0 },
-        ),
-      )
+      let flag = for ag in funcdef.args {
+        match ag.1 {
+          Unit => continue
+          _ => break false
+        }
+      } else {
+        true
+      }
+      if not(flag) {
+        prepareArgs(
+          args,
+          reg_allocator,
+          registerTable[funcdef.name._].unwrap(),
+          closureTable[closure.to_string()].unwrap().args.map(
+            fn(name_ty) { name_ty.0 },
+          ),
+        )
+      }
       riscvs.push(Addi(Sp, Sp, -8))
       riscvs.push(Sd(Ra, { base: Sp, offset: 0 }))
       riscvs.push(Call(closure.to_string()))
@@ -576,7 +587,7 @@ fn processFunction(
       }
     }
   }
-  reg_allocator.stack_offset=stackSize
+  reg_allocator.stack_offset = stackSize
   let return_reg = processInstruction(funtion.body, reg_allocator)
   for asm in riscvs {
     res.body.push(asm)
