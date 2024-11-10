@@ -477,16 +477,26 @@ fn processInstruction(
     }
     // assume this is a double array
     ArrayGet(arr, idx) => {
-      let arr_location = reg_allocator.stack[arr]
-      let arr_memAccess = { base: Sp, offset: arr_location.unwrap() }
-      riscvs.push(Ld(T0, arr_memAccess))
-      let idx_location = reg_allocator.stack[idx]
-      let idx_memAccess = { base: Sp, offset: idx_location.unwrap() }
-      riscvs.push(Ld(T1, idx_memAccess))
-      riscvs.push(Add(T0, T0, T1))
-      let element_location = { base: T0, offset: 0 }
-      riscvs.push(Ld(T0, element_location))
-      T0
+      let reg1 = prepareOperand(arr, reg_allocator)
+      let reg2 = prepareOperand(idx, reg_allocator)
+      match varTable[arr].unwrap() {
+        Array(Int) => {
+          let temp = prepareTempReg(reg_allocator)
+          riscvs.push(Li(temp, "4"))
+          riscvs.push(Mul(reg2, temp, reg2))
+          riscvs.push(Add(reg1, reg1, reg2))
+          riscvs.push(Lw(temp, { base: reg1, offset: 0 }))
+          temp
+        }
+        _ => {
+          let temp = prepareTempReg(reg_allocator)
+          riscvs.push(Li(temp, "8"))
+          riscvs.push(Mul(reg2, temp, reg2))
+          riscvs.push(Add(reg1, reg1, reg2))
+          riscvs.push(Ld(temp, { base: reg1, offset: 0 }))
+          temp
+        }
+      }
     }
     ArrayPut(arr, idx, value) => {
       let arr_location = reg_allocator.stack[arr]
