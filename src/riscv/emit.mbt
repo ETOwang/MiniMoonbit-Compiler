@@ -225,7 +225,7 @@ fn prepareArgs(
 }
 
 fn prepareTempReg(reg_allocator : RegAllocator) -> Reg {
-  let temp_list=[S1,S2,S3,S4,S5,S6]
+  let temp_list=[T0,T1,T2]
   let temp_reg = temp_list[reg_allocator.temp_index]
   reg_allocator.temp_index += 1
   reg_allocator.temp_index %= temp_list.length()
