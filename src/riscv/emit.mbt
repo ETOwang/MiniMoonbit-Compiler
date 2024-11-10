@@ -389,7 +389,7 @@ fn processInstruction(
       let end_label = create_label_end()
        let temp_reg=prepareTempReg(reg_allocator)
       let (reg1, reg2) = prepareOperands(lhs, rhs, reg_allocator)
-      riscvs.push(Beq(reg1, reg2, else_label))
+      riscvs.push(Bne(reg1, reg2, else_label))
       let ret_reg = processInstruction(then, reg_allocator)
       //todo:double
       riscvs.push(Mv(temp_reg, ret_reg))
