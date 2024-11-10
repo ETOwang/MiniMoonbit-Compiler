@@ -75,6 +75,11 @@ fn preProcess(body : @closure.Expr, regAllocator : RegAllocator) -> Int {
           regAllocator.stack_offset += 4
           res += 4
         }
+        ClosureFn(_, _) => {
+          regAllocator.stack[lhs.0] = regAllocator.stack_offset
+          regAllocator.stack_offset += 8
+          res += 8
+        }
         _ => {
           regAllocator.stack[lhs.0] = regAllocator.stack_offset
           regAllocator.stack_offset += 8
@@ -103,9 +108,38 @@ fn preProcess(body : @closure.Expr, regAllocator : RegAllocator) -> Int {
       res += preProcess(rest, regAllocator)
     }
     // TODO Array
+    IfLe(_, _, then, el) | IfEq(_, _, then, el) => {
+      res += preProcess(then, regAllocator)
+      res += preProcess(el, regAllocator)
+    }
+    MakeClosure(_, _, expr) => res += preProcess(expr, regAllocator)
     _ => ()
   }
   res
+}
+
+fn prepareOperand(expr : @types.Name, reg_allocator : RegAllocator) -> Reg {
+  let lhs_location = reg_allocator.stack[expr]
+  let mut reg1 = prepareTempReg(reg_allocator)
+  if lhs_location.is_empty() {
+    reg1 = reg_allocator.used_regs[expr].unwrap()
+  } else {
+    let lhs_memAccess = { base: Sp, offset: lhs_location.unwrap() }
+    riscvs.push(Lw(reg1, lhs_memAccess))
+  }
+  reg1
+}
+
+fn prepareFOperand(expr : @types.Name, reg_allocator : RegAllocator) -> FReg {
+  let lhs_location = reg_allocator.stack[expr]
+  let mut reg1 = Ft0
+  if lhs_location.is_empty() {
+    reg1 = reg_allocator.used_fregs[expr].unwrap()
+  } else {
+    let lhs_memAccess = { base: Sp, offset: lhs_location.unwrap() }
+    riscvs.push(Fld(reg1, lhs_memAccess))
+  }
+  reg1
 }
 
 fn prepareOperands(
@@ -156,28 +190,34 @@ fn prepareFOperands(
   (reg1, reg2)
 }
 
-fn prepareArgs(args : Array[@types.Name], initial:RegAllocator,reg_allocator : RegAllocator) -> Unit {
+fn prepareArgs(
+  args : Array[@types.Name],
+  initial : RegAllocator,
+  reg_allocator : RegAllocator,
+  func_args : Array[@types.Name]
+) -> Unit {
   let mut regIndex = 0
   let mut fregIndex = 0
   for index = 0; index < args.length(); index = index + 1 {
     let arg = args[index]
-    let arg_location = initial.stack[arg]
-    let arg_memAccess = { base: Sp, offset: arg_location.unwrap() }
     let arg_type = varTable[arg]
     match arg_type.unwrap() {
       Int(_) => {
-        reg_allocator.used_regs[arg] = reg_arg_list[regIndex]
-        riscvs.push(Lw(reg_arg_list[regIndex], arg_memAccess))
+        reg_allocator.used_regs[func_args[index]] = reg_arg_list[regIndex]
+        let reg = prepareOperand(arg, initial)
+        riscvs.push(Mv(reg_arg_list[regIndex], reg))
         regIndex += 1
       }
       Double(_) => {
-        reg_allocator.used_fregs[arg] = freg_arg_list[fregIndex]
-        riscvs.push(Fld(freg_arg_list[fregIndex], arg_memAccess))
+        reg_allocator.used_fregs[func_args[index]] = freg_arg_list[fregIndex]
+        let reg = prepareFOperand(arg, initial)
+        riscvs.push(FmvD(freg_arg_list[fregIndex], reg))
         fregIndex += 1
       }
       _ => {
-        reg_allocator.used_regs[arg] = reg_arg_list[regIndex]
-        riscvs.push(Ld(reg_arg_list[regIndex], arg_memAccess))
+        reg_allocator.used_regs[func_args[index]] = reg_arg_list[regIndex]
+        let reg = prepareOperand(arg, initial)
+        riscvs.push(Mv(reg_arg_list[regIndex], reg))
         regIndex += 1
       }
     }
@@ -347,36 +387,34 @@ fn processInstruction(
     IfEq(lhs, rhs, then, els) => {
       let else_label = create_label_else()
       let end_label = create_label_end()
-      let lhs_location = reg_allocator.stack[lhs]
-      let rhs_location = reg_allocator.stack[rhs]
-      let lhs_memAccess = { base: Sp, offset: lhs_location.unwrap() }
-      riscvs.push(Lw(T0, lhs_memAccess))
-      let rhs_memAccess = { base: Sp, offset: rhs_location.unwrap() }
-      riscvs.push(Lw(T1, rhs_memAccess))
-      riscvs.push(Beq(T0, T1, else_label))
-      let _ = processInstruction(then, reg_allocator)
+       let temp_reg=prepareTempReg(reg_allocator)
+      let (reg1, reg2) = prepareOperands(lhs, rhs, reg_allocator)
+      riscvs.push(Beq(reg1, reg2, else_label))
+      let ret_reg = processInstruction(then, reg_allocator)
+      //todo:double
+      riscvs.push(Mv(temp_reg, ret_reg))
       riscvs.push(J(end_label))
       riscvs.push(Label(else_label))
       let elseResult = processInstruction(els, reg_allocator)
+      riscvs.push(Mv(temp_reg, elseResult))
       riscvs.push(Label(end_label))
-      elseResult
+      temp_reg
     }
     IfLe(lhs, rhs, then, els) => {
       let else_label = create_label_else()
       let end_label = create_label_end()
-      let lhs_location = reg_allocator.stack[lhs]
-      let rhs_location = reg_allocator.stack[rhs]
-      let lhs_memAccess = { base: Sp, offset: lhs_location.unwrap() }
-      riscvs.push(Lw(T0, lhs_memAccess))
-      let rhs_memAccess = { base: Sp, offset: rhs_location.unwrap() }
-      riscvs.push(Lw(T1, rhs_memAccess))
-      riscvs.push(Blt(T1, T0, else_label))
-      let _ = processInstruction(then, reg_allocator)
+      let temp_reg=prepareTempReg(reg_allocator)
+      let (reg1, reg2) = prepareOperands(lhs, rhs, reg_allocator)
+      riscvs.push(Blt(reg2, reg1, else_label))
+      let ret_reg = processInstruction(then, reg_allocator)
+      //todo:double
+      riscvs.push(Mv(temp_reg, ret_reg))
       riscvs.push(J(end_label))
       riscvs.push(Label(else_label))
       let elseResult = processInstruction(els, reg_allocator)
+      riscvs.push(Mv(temp_reg, elseResult))
       riscvs.push(Label(end_label))
-      elseResult
+      temp_reg
     }
     Var(var) => {
       let var_location = reg_allocator.stack[var]
@@ -418,7 +456,28 @@ fn processInstruction(
       T1
     }
     CallDirect(label, args) => {
-      prepareArgs(args, reg_allocator,reg_allocator)
+      let mut regIndex = 0
+      let mut fregIndex = 0
+      for index = 0; index < args.length(); index = index + 1 {
+        let arg = args[index]
+        let arg_location = reg_allocator.stack[arg]
+        let arg_memAccess = { base: Sp, offset: arg_location.unwrap() }
+        let arg_type = varTable[arg]
+        match arg_type.unwrap() {
+          Int(_) => {
+            riscvs.push(Lw(reg_arg_list[regIndex], arg_memAccess))
+            regIndex += 1
+          }
+          Double(_) => {
+            riscvs.push(Fld(freg_arg_list[fregIndex], arg_memAccess))
+            fregIndex += 1
+          }
+          _ => {
+            riscvs.push(Ld(reg_arg_list[regIndex], arg_memAccess))
+            regIndex += 1
+          }
+        }
+      }
       riscvs.push(Addi(Sp, Sp, -8))
       riscvs.push(Sd(Ra, { base: Sp, offset: 0 }))
       riscvs.push(Call(label._))
@@ -435,11 +494,19 @@ fn processInstruction(
     }
     CallClosure(closure, args) => {
       //TODO:FuncPtr
+      println(closure)
       let funcdef = closureTable[closure.to_string()].unwrap()
       for fv in funcdef.formal_free_vars {
         args.push(fv.0)
       }
-      prepareArgs(args, reg_allocator,registerTable[funcdef.name._].unwrap())
+      prepareArgs(
+        args,
+        reg_allocator,
+        registerTable[funcdef.name._].unwrap(),
+        closureTable[closure.to_string()].unwrap().args.map(
+          fn(name_ty) { name_ty.0 },
+        ),
+      )
       riscvs.push(Addi(Sp, Sp, -8))
       riscvs.push(Sd(Ra, { base: Sp, offset: 0 }))
       riscvs.push(Call(closure.to_string()))
@@ -469,12 +536,55 @@ fn processFunction(
       data: Array::new(),
     }
   }
-  let stackSize : Int = preProcess(funtion.body, reg_allocator)
+  let stackSize : Int = preProcess(funtion.body, reg_allocator) +
+    funtion.args.length() * 8
   res.body.push(Addi(Sp, Sp, -stackSize))
-  let _ = processInstruction(funtion.body, reg_allocator)
+  let mut reg_index = 0
+  let mut freg_index = 0
+  for index = 0; index < funtion.args.length(); index = index + 1 {
+    let arg = funtion.args[index]
+    match arg.1 {
+      Int(_) => {
+        reg_allocator.stack[arg.0] = reg_allocator.stack_offset
+        reg_allocator.stack_offset += 4
+        riscvs.push(
+          Sw(
+            reg_arg_list[reg_index],
+            { base: Sp, offset: reg_allocator.stack_offset - 4 },
+          ),
+        )
+        reg_index += 1
+      }
+      Double(_) => {
+        reg_allocator.stack[arg.0] = reg_allocator.stack_offset
+        reg_allocator.stack_offset += 8
+        riscvs.push(
+          Fsd(
+            freg_arg_list[freg_index],
+            { base: Sp, offset: reg_allocator.stack_offset - 8 },
+          ),
+        )
+        freg_index += 1
+      }
+      _ => {
+        reg_allocator.stack[arg.0] = reg_allocator.stack_offset
+        reg_allocator.stack_offset += 8
+        riscvs.push(
+          Sd(
+            reg_arg_list[reg_index],
+            { base: Sp, offset: reg_allocator.stack_offset - 8 },
+          ),
+        )
+        reg_index += 1
+      }
+    }
+  }
+  reg_allocator.stack_offset=stackSize
+  let return_reg = processInstruction(funtion.body, reg_allocator)
   for asm in riscvs {
     res.body.push(asm)
   }
+  res.body.push(Mv(reg_ret, return_reg))
   res.body.push(Addi(Sp, Sp, stackSize))
   res.body.push(Ret)
   riscvs.clear()
@@ -509,7 +619,6 @@ pub fn AssemblyFunction::output(
     Show::output(asm, logger)
     logger.write_string("\n")
   }
-  
 }
 
 pub fn emit(input : @closure.Program) -> Array[AssemblyFunction] {
@@ -536,6 +645,9 @@ pub fn emit(input : @closure.Program) -> Array[AssemblyFunction] {
     registerTable[fun.name._] = regAllocator
   }
   for fun in input.fundefs {
+    for arg in fun.args {
+      varTable[arg.0] = arg.1
+    }
     res.push(processFunction(fun, registerTable[fun.name._].unwrap()))
   }
   for func in res {

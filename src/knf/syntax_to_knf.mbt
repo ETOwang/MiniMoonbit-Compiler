@@ -113,8 +113,14 @@ fn insert_let(self : KnfEnv, e : Knf, t : Type, k : (Name) -> Knf) -> Knf {
     Var(x) => k(x) // 如果是变量，直接调用继续函数 k
     _ => {
       let x = new_temp(self) // 生成一个临时标识符
+      // if x.to_string() == "_207"{
+      //   println("207SSSSS")
+      // }
       let e1 = k(x)
-      ignore(addVarToEnv(self, x.to_string(), x, t))
+      match t {
+        Fun(_, _) => ignore(addFuncToEnv(self, x.to_string(), x, t))
+        _ => ignore(addVarToEnv(self, x.to_string(), x, t))
+      }
       return Let( // 调用继续函数，得到新的表达式和类型
         (x, t),
         e,
@@ -150,14 +156,26 @@ pub fn get_knf_type(self : KnfEnv, knf : Knf) -> Type {
       get_knf_type(self, body) // 假设 Let 返回 body 的类型
     Knf::Var(name) => {
       if self.func_name_and_type[name] != None {
-        return self.func_name_and_type[name].unwrap()
+        match self.func_name_and_type[name].unwrap() {
+          Fun(_, t) => return t
+          _ => {
+            println("WWWW")
+            abort("")
+          }
+        }
       }
       getTypeFromName(self, name)
     }
     Knf::LetRec(_, body) => get_knf_type(self, body) // 假设 LetRec 返回 body 的类型
     Knf::Apply(ret, _) => {
       if self.func_name_and_type[ret] != None {
-        return self.func_name_and_type[ret].unwrap()
+        match self.func_name_and_type[ret].unwrap() {
+          Fun(_, t) => return t
+          _ => {
+            println("WWWW")
+            abort("")
+          }
+        }
       }
       getTypeFromName(self, ret)
     } // 假设 Apply 返回 Int 类型
@@ -176,44 +194,9 @@ pub fn get_knf_type(self : KnfEnv, knf : Knf) -> Type {
     Knf::Get(array, _) => getTypeFromName(self, array) // 假设 Get 返回 Int 类型
     Knf::Put(_, e2, e3) => getTypeFromName(self, e3) // 假设 Put 返回 Unit 类型
     Knf::ExternalArray(_) => Type::Array(Type::Int)
-    Knf::ExternalFunctionApplication(str, _) =>
-      if str == "minimbt_create_array" {
-        Type::Array(Type::Int)
-      } else if str == "minimbt_create_float_array" {
-        Type::Array(Type::Double)
-      } else if str == "minimbt_sqrt" {
-        Type::Double
-      } else if str == "minimbt_sin" {
-        Type::Double
-      } else if str == "minimbt_cos" {
-        Type::Double
-      } else if str == "minimbt_abs_float" {
-        Type::Double
-      } else if str == "minimbt_int_of_float" {
-        Type::Int
-      } else if str == "minimbt_float_of_int" {
-        Type::Double
-      } else if str == "minimbt_print_int" {
-        Type::Unit
-      } else if str == "minimbt_print_char" {
-        Type::Unit
-      } else if str == "mini_print_endline" {
-        Type::Unit
-      } else if str == "minimbt_print_newline" {
-        Type::Unit
-      } else if str == "minimbt_read_int" {
-        Type::Int
-      } else if str == "minimbt_read_char" {
-        Type::Int
-      } else if str == "minimbt_create_ptr_array" {
-        Type::Array(Type::Ptr)
-      } else if str == "truncate" {
-        Type::Int
-      } else {
-        Type::Array(Type::Ptr)
-      }
+    Knf::ExternalFunctionApplication(_, _) => Type::Unit
+    // 可以添加更多变体的处理...
   }
-  // 可以添加更多变体的处理...
 }
 
 pub fn KnfEnv::to_knf(self : KnfEnv, s : @types.Syntax) -> Knf {
@@ -338,19 +321,19 @@ pub fn KnfEnv::to_knf(self : KnfEnv, s : @types.Syntax) -> Knf {
       // }
     }
     LetRec({ name: (x, t), args: yts, body: e1 }, e2) => {
-      let mut xName = new_temp(self)
-      if x == "main" {
-        xName = { name: Some("minimbt_main"), slot: 0 }
-      }
+      let xName = new_temp(self)
       // println(x)
       let argsType : Array[Type] = Array::new()
       for item in yts {
         argsType.push(item.1)
       }
       match t {
-        Type::Fun(_, _) =>
-          ignore(addFuncToEnv(self, x, xName, Type::Fun(argsType, t)))
-        _ => ignore(addVarToEnv(self, x, xName, Type::Fun(argsType, t)))
+        Type::Fun(_, returnT) =>
+          ignore(addFuncToEnv(self, x, xName, Type::Fun(argsType, returnT)))
+        _ => {
+          println("WRONG")
+          ignore(addVarToEnv(self, x, xName, Type::Fun(argsType, t)))
+        }
       }
       // ignore(addFuncToEnv(self, x, xName, Type::Fun(argsType, t)))
       // for item in self.signTable {
@@ -394,10 +377,8 @@ pub fn KnfEnv::to_knf(self : KnfEnv, s : @types.Syntax) -> Knf {
       if x != "main" {
         LetRec({ name: xName, ty: t, args: ytsName, body: k1 }, k2)
       } else {
-        LetRec(
-          { name: xName, ty: t, args: ytsName, body: k1 },
-          Apply(xName, []),
-        )
+        let na : Name = { name: Some("minimbt_main"), slot: 0 }
+        LetRec({ name: na, ty: t, args: ytsName, body: k1 }, Apply(na, []))
       }
     }
     App(Var(f), e2s) =>
@@ -420,7 +401,9 @@ pub fn KnfEnv::to_knf(self : KnfEnv, s : @types.Syntax) -> Knf {
                 // println("E2: " + e2.to_string() + " K2: " + k2.to_string())
                 // println("Point")
                 let t1 = get_knf_type(self, k2)
-                insert_let(
+                // println("SSSS")
+                // println("T " + k2.to_string())
+                let knff = insert_let(
                   self,
                   k2,
                   t1,
@@ -429,6 +412,8 @@ pub fn KnfEnv::to_knf(self : KnfEnv, s : @types.Syntax) -> Knf {
                     bind(xs)
                   },
                 )
+                // println("SSSS")
+                knff
               }
             }
 
@@ -527,6 +512,7 @@ pub fn KnfEnv::to_knf(self : KnfEnv, s : @types.Syntax) -> Knf {
           )
         _ => {
           // println("Wrong type") 
+          println("TYPE: " + e1Knf.to_string())
           println("Type not found2")
           abort("Not a function")
         }
@@ -768,14 +754,9 @@ pub fn KnfEnv::to_knf(self : KnfEnv, s : @types.Syntax) -> Knf {
         insert_let(
           self,
           ka,
-          Type::Double,
+          Type::Int,
           fn(x : Name) -> Knf {
-            insert_let(
-              self,
-              kb,
-              Type::Double,
-              fn(y : Name) -> Knf { FSub(x, y) },
-            )
+            insert_let(self, kb, Type::Int, fn(y : Name) -> Knf { FSub(x, y) })
           },
         )
       } else if op == @types.Op::Mul && k == Some(@types.Kind::Int) {
@@ -825,14 +806,9 @@ pub fn KnfEnv::to_knf(self : KnfEnv, s : @types.Syntax) -> Knf {
         insert_let(
           self,
           ka,
-          Type::Double,
+          Type::Int,
           fn(x : Name) -> Knf {
-            insert_let(
-              self,
-              kb,
-              Type::Double,
-              fn(y : Name) -> Knf { FMul(x, y) },
-            )
+            insert_let(self, kb, Type::Int, fn(y : Name) -> Knf { FMul(x, y) })
           },
         )
       } else if op == @types.Op::Div && k == Some(@types.Kind::Int) {
@@ -882,14 +858,9 @@ pub fn KnfEnv::to_knf(self : KnfEnv, s : @types.Syntax) -> Knf {
         insert_let(
           self,
           ka,
-          Type::Double,
+          Type::Int,
           fn(x : Name) -> Knf {
-            insert_let(
-              self,
-              kb,
-              Type::Double,
-              fn(y : Name) -> Knf { FDiv(x, y) },
-            )
+            insert_let(self, kb, Type::Int, fn(y : Name) -> Knf { FDiv(x, y) })
           },
         )
       } else {
