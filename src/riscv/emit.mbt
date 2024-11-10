@@ -247,20 +247,12 @@ fn processInstruction(
       reg
     }
     Double(value) => {
-      // asmData.push(("double_" + counter[0].to_string(), value))
-      // let reg = prepareTempReg(reg_allocator)
-      // riscvs.push(La(reg, "double_" + counter[0].to_string()))
-      // riscvs.push(Fld(Ft0, { base: reg, offset: 0 }))
-      // riscvs.push(FmvDX(Ft0, reg))
-      // counter[0] += 1
+      asmData.push(("double_" + counter[0].to_string(), value))
       let reg = prepareTempReg(reg_allocator)
-      let temp=prepareTempReg(reg_allocator)
-      let high=(value.reinterpret_as_uint64()>>32).to_uint()
-      let low=((value.reinterpret_as_uint64()<<32)>>32).to_uint()
-      riscvs.push(Li(reg,high.to_string()))
-     riscvs.push(Slli(reg,reg,32))
-      riscvs.push(Li(temp,low.to_string()))
-      riscvs.push(Or(reg,reg,temp))
+      riscvs.push(La(reg, "double_" + counter[0].to_string()))
+      riscvs.push(Fld(Ft0, { base: reg, offset: 0 }))
+      riscvs.push(FmvXD(reg, Ft0))
+      counter[0] += 1
       reg
     }
     Add(lhs, rhs) => {
@@ -500,7 +492,14 @@ pub fn AssemblyFunction::output(
   self : AssemblyFunction,
   logger : Logger
 ) -> Unit {
-  
+  if self.name == "minimbt_main" {
+    for label in self.data {
+      logger.write_string(".global ")
+      logger.write_string("\{label.0}\n")
+      logger.write_string("\{label.0}: .double \{label.1.to_string()}\n")
+    }
+    logger.write_string("\n")
+  }
   let name = self.name
   if self.export {
     logger.write_string(".global \{name}\n")
@@ -510,15 +509,7 @@ pub fn AssemblyFunction::output(
     Show::output(asm, logger)
     logger.write_string("\n")
   }
-  if self.name == "minimbt_main" {
-    for label in self.data {
-      logger.write_string(".global ")
-      logger.write_string("\{label.0}\n")
-      logger.write_string("\{label.0}: .double \{label.1.to_string()}\n")
-    }
-    logger.write_string("\n")
-
-  }
+  
 }
 
 pub fn emit(input : @closure.Program) -> Array[AssemblyFunction] {
