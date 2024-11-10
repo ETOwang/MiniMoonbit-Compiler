@@ -494,11 +494,7 @@ fn processInstruction(
     }
     CallClosure(closure, args) => {
       //TODO:FuncPtr
-      println(closure)
       let funcdef = closureTable[closure.to_string()].unwrap()
-      for fv in funcdef.formal_free_vars {
-        args.push(fv.0)
-      }
       prepareArgs(
         args,
         reg_allocator,

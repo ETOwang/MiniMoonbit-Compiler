@@ -21,7 +21,7 @@
 // }
 
 // test {
-//   let input = @fs.read_file_to_string!(path="test/test_src/ack.mbt")
+//   let input = @fs.read_file_to_string!(path="test/test_src/shuffle.mbt")
 //   let context = @parser.parse(input)
 //   let typechecked = @typing.typing!(context)
 //   println(typechecked)
@@ -39,6 +39,37 @@
 //   let asm = emit(closure_ir)
 //   println(print_functions(asm))
 // }
+// // {fundefs: [{name: Label("minimbt_main"), 
+// // old_name: minimbt_main, 
+// // is_closure: true, 
+// // ty: ClosureFn([], Unit), 
+// // args: [], 
+// // formal_free_vars: [(_202, ClosureFn([Int, Int, Int, Int, Int, Int], Unit))], 
+// // body: Let((_405, Int), Int(1), 
+// // Let((_406, Int), Int(2), 
+// // Let((_407, Int), Int(3), 
+// // Let((_408, Int), Int(4), 
+// // Let((_409, Int), Int(5), 
+// // Let((_410, Int), Int(6), 
+// // CallClosure(_202, [_405, _406, _407, _408, _409, _410])))))))}, 
+// // {name: Label("_202"), 
+// // old_name: _202, 
+// // is_closure: true, 
+// // ty: ClosureFn([Int, Int, Int, Int, Int, Int], Unit), 
+// // args: [(_204, Int), (_205, Int), (_206, Int), (_207, Int), (_208, Int), (_209, Int)], 
+// // formal_free_vars: [(_1, ClosureFn([Int, Int, Int, Int, Int, Int], Unit))],
+// // body: CallClosure(_1, [_205, _204, _207, _208, _209, _206])},
+// //  {name: Label("_1"), 
+// //  old_name: _1, 
+// //  is_closure: true, 
+// //  ty: ClosureFn([Int, Int, Int, Int, Int, Int], Unit), 
+// //  args: [(_3, Int), (_4, Int), (_5, Int), (_6, Int), (_7, Int), (_8, Int)], 
+// //  formal_free_vars: [], 
+// //  body: Let((_9, Unit), CallDirect(Label("minimbt_print_int"), 
+// //  [_3, _4, _5, _6, _7, _8]), 
+// //  Let((_10, Unit), 
+// //  CallDirect(Label("minimbt_print_int"), [_4, _5, _6, _7, _8]),
+// //   Let((_11, Unit), CallDirect(Label("minimbt_print_int"), [_5, _6, _7, _8]), Let((_12, Unit), CallDirect(Label("minimbt_print_int"), [_6, _7, _8]), Let((_13, Unit), CallDirect(Label("minimbt_print_int"), [_7, _8]), Let((_14, Unit), CallDirect(Label("minimbt_print_int"), [_8]), Unit))))))}], body: MakeClosure((_1, ClosureFn([Int, Int, Int, Int, Int, Int], Unit)), {name: Label("_1"), actual_free_vars: []}, MakeClosure((_202, ClosureFn([Int, Int, Int, Int, Int, Int], Unit)), {name: Label("_202"), actual_free_vars: [_1]}, MakeClosure((minimbt_main, ClosureFn([], Unit)), {name: Label("minimbt_main"), actual_free_vars: [_202]}, CallClosure(minimbt_main, []))))}
 // // {fundefs: [{name: Label("_403"), 
 // // old_name: _403, 
 // // is_closure: true, 
