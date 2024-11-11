@@ -4,10 +4,10 @@ pub struct RegAllocator {
   used_regs : @hashmap.T[@types.Name, Reg] // 已使用的寄存器
   used_fregs : @hashmap.T[@types.Name, FReg] // 已使用的寄存器
   stack : @hashmap.T[@types.Name, Int] // 存储溢出时的寄存器和变量信息
-  fv_list : Array[(@types.Name,@closure.LowType)] // 自由变量列表
+  fv_list : Array[(@types.Name, @closure.LowType)] // 自由变量列表
   mut stack_offset : Int // 栈偏移量，表示当前栈的位置
   mut temp_index : Int
-  mut temp_findex:Int
+  mut temp_findex : Int
 }
 
 pub let extenv : Map[String, @types.Type] = {
@@ -48,6 +48,10 @@ let else_counter : Array[Int] = Array::new()
 
 let registerTable : @hashmap.T[String, RegAllocator] = @hashmap.new()
 
+let externalVar : @hashmap.T[String, Int] = @hashmap.new()
+
+let externalFVar : @hashmap.T[String, Double] = @hashmap.new()
+
 fn create_label_else() -> String {
   let temp = "else_" + else_counter[0].to_string()
   else_counter[0] += 1
@@ -60,49 +64,62 @@ fn create_label_end() -> String {
   temp
 }
 
-// fn processBody(body : @closure.Expr, reg_allocator : Array[RegAllocator]) -> Unit {
-//   let regs=[S1,S2,S3,S4]
-//   match body {
-//     //TODO
-//     Let((name,name_ty),rhs,rest) => {
-//       let rhs_reg = processBody(rhs,reg_allocator)
-//       match name_ty {
-//         Unit => processBody(rest,reg_allocator)
-//         Int => {
-//           varTable[name] = name_ty
-//           let name_memAccess = {base:Sp,offset:reg_allocator.stack[name].unwrap()}
-//           riscvs.push(Sw(rhs_reg,name_memAccess))
-//           processBody(rest,reg_allocator)
-//         }
-//         _ => {
-//           varTable[name] = name_ty
-//           let name_memAccess = {base:Sp,offset:reg_allocator.stack[name].unwrap()}
-//           riscvs.push(Sd(rhs_reg,name_memAccess))
-//           processBody(rest,reg_allocator)
-//         }
-//       }
-//     }
-//     _=>{
-//       ()
-//     }
-//   }
-// }
-
-fn save()->Unit{
-   let saving_regs=[T0,T1,T2,S11]
-   riscvs.push(Addi(Sp, Sp, -saving_regs.length()*8))
-    for index = 0; index < saving_regs.length(); index = index + 1 {
-        riscvs.push(Sd(saving_regs[index], { base: Sp, offset: index*8 }))
+fn processIntBody(body : @closure.Expr) -> Int {
+  match body {
+    Int(value) => value
+    Double(value) => value.to_int()
+    Let((name, name_ty), rhs, rest) => {
+      let value = processIntBody(rhs)
+      match name_ty {
+        Int(_) => {
+          varTable[name] = name_ty
+          externalVar[name.to_string()] = value
+        }
+        _ => ()
+      }
+      processIntBody(rest)
     }
+    MakeClosure((name, name_ty), closure, rest) => processIntBody(rest)
+    _ => -1
+  }
 }
 
-fn load()->Unit{
-    let saving_regs=[T0,T1,T2,S11]
-    for index = 0; index < saving_regs.length(); index = index + 1 {
-        riscvs.push(Ld(saving_regs[index], { base: Sp, offset: index*8 }))
+fn processDoubleBody(body : @closure.Expr) -> Double {
+  match body {
+    Int(value) => value.to_double()
+    Double(value) => value
+    Let((name, name_ty), rhs, rest) => {
+      let value = processDoubleBody(rhs)
+      match name_ty {
+        Double => {
+          varTable[name] = name_ty
+          externalFVar[name.to_string()] = value
+        }
+        _ => ()
+      }
+      processDoubleBody(rest)
     }
-    riscvs.push(Addi(Sp, Sp, saving_regs.length()*8))
+    MakeClosure((name, name_ty), closure, rest) => processDoubleBody(rest)
+    _ => -1
+  }
 }
+
+fn save() -> Unit {
+  //  let saving_regs=[T0,T1,T2,S11]
+  //  riscvs.push(Addi(Sp, Sp, -saving_regs.length()*8))
+  //   for index = 0; index < saving_regs.length(); index = index + 1 {
+  //       riscvs.push(Sd(saving_regs[index], { base: Sp, offset: index*8 }))
+  //   }
+}
+
+fn load() -> Unit {
+  // let saving_regs=[T0,T1,T2,S11]
+  // for index = 0; index < saving_regs.length(); index = index + 1 {
+  //     riscvs.push(Ld(saving_regs[index], { base: Sp, offset: index*8 }))
+  // }
+  // riscvs.push(Addi(Sp, Sp, saving_regs.length()*8))
+}
+
 fn preProcess(body : @closure.Expr, regAllocator : RegAllocator) -> Int {
   let mut res = 0
   match body {
@@ -166,33 +183,44 @@ fn prepareOperand(expr : @types.Name, reg_allocator : RegAllocator) -> Reg {
   let lhs_location = reg_allocator.stack[expr]
   let mut reg1 = prepareTempReg(reg_allocator)
   if lhs_location.is_empty() {
-    let temp=reg_allocator.used_regs[expr]
-    if(temp.is_empty()){
-      let mut record=0
-      for index = 0; index < reg_allocator.fv_list.length(); index = index + 1 {     
-         let fv_var=reg_allocator.fv_list[index]
-         if(fv_var.0==expr){
-            let temp=prepareTempReg(reg_allocator)
-            riscvs.push(Ld(temp, { base: S11, offset: record+8 }))
-            match fv_var.1{
-                Int(_) => {
-                  riscvs.push(Lw(temp, { base: temp, offset: 0 }))
-                  return temp
-                }
-                _ => {
-                  riscvs.push(Ld(temp, { base: temp, offset: 0 }))
-                  return temp
-                }
-            }
-         }
-         match fv_var.1{
+    let temp = reg_allocator.used_regs[expr]
+    if temp.is_empty() {
+      let res = externalVar[expr.to_string()]
+      if not(res.is_empty()) {
+        riscvs.push(Li(reg1, res.unwrap().to_string()))
+        return reg1
+      }
+      let expr_type = varTable[expr]
+      if not(expr_type.is_empty()) {
+        match expr_type.unwrap() {
+          ClosureFn(_) => {
+            riscvs.push(La(reg1, expr.to_string()))
+            return reg1
+          }
+          _ => @util.die("error")
+        }
+      }
+      let mut record = 0
+      for index = 0; index < reg_allocator.fv_list.length(); index = index + 1 {
+        let fv_var = reg_allocator.fv_list[index]
+        if fv_var.0 == expr {
+          let temp = prepareTempReg(reg_allocator)
+          riscvs.push(Ld(temp, { base: S11, offset: record + 8 }))
+          match fv_var.1 {
             Int(_) => {
-               record+=4
+              riscvs.push(Lw(temp, { base: temp, offset: 0 }))
+              return temp
             }
             _ => {
-              record+=8
+              riscvs.push(Ld(temp, { base: temp, offset: 0 }))
+              return temp
             }
-         }
+          }
+        }
+        match fv_var.1 {
+          Int(_) => record += 4
+          _ => record += 8
+        }
       }
       @util.die("error")
     }
@@ -209,36 +237,36 @@ fn prepareOperand(expr : @types.Name, reg_allocator : RegAllocator) -> Reg {
 
 fn prepareFOperand(expr : @types.Name, reg_allocator : RegAllocator) -> FReg {
   let lhs_location = reg_allocator.stack[expr]
-  let mut reg1=prepareTempFReg(reg_allocator)
+  let mut reg1 = prepareTempFReg(reg_allocator)
   if lhs_location.is_empty() {
-    let temp=reg_allocator.used_fregs[expr]
-    if(temp.is_empty()){
-      let mut record=0
-      for index = 0; index < reg_allocator.fv_list.length(); index = index + 1 {     
-         let fv_var=reg_allocator.fv_list[index]
-         if(fv_var.0==expr){
-            let temp=prepareTempReg(reg_allocator)
-            riscvs.push(Ld(temp, { base: S11, offset: record+8 }))
-            match fv_var.1{
-                Double(_) => {
-                  let ftemp=prepareTempFReg(reg_allocator)
-                  riscvs.push(Fld(ftemp, { base: temp, offset: 0 }))
-                  return ftemp
-                }
-                _ => {
-                  @util.die("Need a Double")
-                }
+    let temp = reg_allocator.used_fregs[expr]
+    if temp.is_empty() {
+      let mut record = 0
+      for index = 0; index < reg_allocator.fv_list.length(); index = index + 1 {
+        let fv_var = reg_allocator.fv_list[index]
+        if fv_var.0 == expr {
+          let temp = prepareTempReg(reg_allocator)
+          riscvs.push(Ld(temp, { base: S11, offset: record + 8 }))
+          match fv_var.1 {
+            Double(_) => {
+              let ftemp = prepareTempFReg(reg_allocator)
+              riscvs.push(Fld(ftemp, { base: temp, offset: 0 }))
+              return ftemp
             }
-         }
-         match fv_var.1{
-            Int(_) => {
-               record+=4
-            }
-            _ => {
-              record+=8
-            }
-         }
+            _ => @util.die("Need a Double")
+          }
+        }
+        match fv_var.1 {
+          Int(_) => record += 4
+          _ => record += 8
+        }
       }
+      //TODO
+      // let res=externalFVar[expr.to_string()]
+      // if(not(res.is_empty())){
+      //     riscvs.push(Li(reg1, res.to_string()))
+      //     return reg1
+      // }
       @util.die("error")
     }
     reg1 = reg_allocator.used_fregs[expr].unwrap()
@@ -257,7 +285,7 @@ fn prepareOperands(
   rhs : @types.Name,
   reg_allocator : RegAllocator
 ) -> (Reg, Reg) {
-  (prepareOperand(lhs,reg_allocator), prepareOperand(rhs,reg_allocator))
+  (prepareOperand(lhs, reg_allocator), prepareOperand(rhs, reg_allocator))
 }
 
 fn prepareFOperands(
@@ -265,13 +293,10 @@ fn prepareFOperands(
   rhs : @types.Name,
   reg_allocator : RegAllocator
 ) -> (FReg, FReg) {
-  (prepareFOperand(lhs,reg_allocator), prepareFOperand(rhs,reg_allocator))
+  (prepareFOperand(lhs, reg_allocator), prepareFOperand(rhs, reg_allocator))
 }
 
-fn prepareArgs(
-  args : Array[@types.Name],
-  initial : RegAllocator,
-) -> Unit {
+fn prepareArgs(args : Array[@types.Name], initial : RegAllocator) -> Unit {
   let mut regIndex = 0
   let mut fregIndex = 0
   for index = 0; index < args.length(); index = index + 1 {
@@ -299,6 +324,7 @@ fn prepareArgs(
     }
   }
 }
+
 fn prepareTempFReg(reg_allocator : RegAllocator) -> FReg {
   let temp_list = [Ft0, Ft1, Ft2]
   let temp_reg = temp_list[reg_allocator.temp_findex]
@@ -306,6 +332,7 @@ fn prepareTempFReg(reg_allocator : RegAllocator) -> FReg {
   reg_allocator.temp_findex %= temp_list.length()
   temp_reg
 }
+
 fn prepareTempReg(reg_allocator : RegAllocator) -> Reg {
   let temp_list = [T0, T1, T2]
   let temp_reg = temp_list[reg_allocator.temp_index]
@@ -409,7 +436,7 @@ fn processInstruction(
       let tuple_reg = prepareOperand(tuple, reg_allocator)
       for index = 0; index < vars.length(); index = index + 1 {
         let var = vars[index]
-        varTable[var.0]=var.1
+        varTable[var.0] = var.1
         let var_location = reg_allocator.stack[var.0]
         let var_memAccess = { base: Sp, offset: var_location.unwrap() }
         match var.1 {
@@ -430,7 +457,7 @@ fn processInstruction(
       processInstruction(rest, reg_allocator)
     }
     MakeClosure((var, var_ty), closure, rest) => {
-      varTable[var]=var_ty
+      varTable[var] = var_ty
       let fvs = closure.actual_free_vars
       let closure_reg = createClosure(fvs.length(), closure, reg_allocator)
       let closure_memAccess = {
@@ -462,7 +489,6 @@ fn processInstruction(
       reg
     }
     Add(lhs, rhs) => {
-
       let (reg1, reg2) = prepareOperands(lhs, rhs, reg_allocator)
       riscvs.push(Add(reg1, reg1, reg2))
       reg1
@@ -583,20 +609,16 @@ fn processInstruction(
       riscvs.push(Label(end_label))
       temp_reg
     }
-    Var(var) => {
-      match varTable[var].unwrap(){
-          Double(_)=>{
-              let temp=prepareFOperand(var, reg_allocator)
-              let res=prepareTempReg(reg_allocator)
-              riscvs.push(FmvXD(res,temp))
-              res
-          }
-          _=>{
-              prepareOperand(var, reg_allocator)
-          }
+    Var(var) =>
+      match varTable[var].unwrap() {
+        Double(_) => {
+          let temp = prepareFOperand(var, reg_allocator)
+          let res = prepareTempReg(reg_allocator)
+          riscvs.push(FmvXD(res, temp))
+          res
+        }
+        _ => prepareOperand(var, reg_allocator)
       }
-     
-    }
     // assume this is a double array
     ArrayGet(arr, idx) => {
       let reg1 = prepareOperand(arr, reg_allocator)
@@ -677,16 +699,12 @@ fn processInstruction(
     CallClosure(closure, args) => {
       let temp = closureTable[closure.to_string()]
       if temp.is_empty() {
-        prepareArgs(
-          args,
-          reg_allocator
-        )
-    
-        let closure_reg=prepareOperand(closure,reg_allocator)
+        prepareArgs(args, reg_allocator)
+        let closure_reg = prepareOperand(closure, reg_allocator)
         //TODO:save s11
-        
+
         riscvs.push(Mv(S11, closure_reg))
-        let func_ptr=prepareTempReg(reg_allocator)
+        let func_ptr = prepareTempReg(reg_allocator)
         riscvs.push(Ld(func_ptr, { base: closure_reg, offset: 0 }))
         riscvs.push(Addi(Sp, Sp, -8))
         riscvs.push(Sd(Ra, { base: Sp, offset: 0 }))
@@ -698,10 +716,7 @@ fn processInstruction(
         load()
         return reg_ret
       }
-      prepareArgs(
-        args,
-        reg_allocator,
-      )
+      prepareArgs(args, reg_allocator)
       riscvs.push(Addi(Sp, Sp, -8))
       riscvs.push(Sd(Ra, { base: Sp, offset: 0 }))
       save()
@@ -829,6 +844,8 @@ pub fn emit(input : @closure.Program) -> Array[AssemblyFunction] {
       closureTable[fun.name._] = fun
     }
   }
+  let _=processIntBody(input.body)
+  let _=processDoubleBody(input.body)
   for fun in input.fundefs {
     let regAllocator = {
       available_regs: reg_allocatable_list,
@@ -839,8 +856,9 @@ pub fn emit(input : @closure.Program) -> Array[AssemblyFunction] {
       fv_list: fun.formal_free_vars,
       stack_offset: 0,
       temp_index: 0,
-      temp_findex:0
+      temp_findex: 0,
     }
+    varTable[fun.old_name] = fun.ty
     registerTable[fun.name._] = regAllocator
   }
   for fun in input.fundefs {

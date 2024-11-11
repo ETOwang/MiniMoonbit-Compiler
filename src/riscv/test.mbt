@@ -21,7 +21,7 @@
 // }
 
 // test {
-//   let input = @fs.read_file_to_string!(path="test/test_src/inprod.mbt")
+//   let input = @fs.read_file_to_string!(path="test/test_src/cls-rec.mbt")
 //   let context = @parser.parse(input)
 //   let typechecked = @typing.typing!(context)
 //   println(typechecked)
@@ -39,6 +39,67 @@
 //   let asm = emit(closure_ir)
 //   println(print_functions(asm))
 // }
+// // {fundefs: [
+// //   {name: Label("minimbt_main"), 
+// //   old_name: minimbt_main, 
+// //   is_closure: true, 
+// //   ty: ClosureFn([], Unit), 
+// //   args: [], 
+// //   formal_free_vars: [(_1, ClosureFn([ClosureFn([Int], Int), ClosureFn([Int], Int)], ClosureFn([Int], Int))), (_202, ClosureFn([Int], Int)), (_604, ClosureFn([Int], Int)), (_403, ClosureFn([Int], Int))], 
+// //   body: Let((_808, ClosureFn([Int], Int)), 
+// //   Let((_807, ClosureFn([Int], Int)), 
+// //   CallClosure(_1, [_202, _604]), 
+// //   CallClosure(_1, [_403, _807])), 
+// //   Let((_810, Int), 
+// //   Let((_809, Int), 
+// //   Int(123), 
+// //   CallClosure(_808, [_809])), 
+// //   CallDirect(Label("minimbt_print_int"), [_810])))}, 
+
+// //   {name: Label("_604"), 
+// //   old_name: _604, 
+// //   is_closure: true, 
+// //   ty: ClosureFn([Int], Int), 
+// //   args: [(_606, Int)], 
+// //   formal_free_vars: [], 
+// //   body: Let((_607, Int), Int(1), 
+// //   Sub(_606, _607))}, 
+
+// //   {name: Label("_403"), 
+// //   old_name: _403, 
+// //   is_closure: true, 
+// //   ty: ClosureFn([Int], Int), 
+// //   args: [(_405, Int)], 
+// //   formal_free_vars: [], 
+// //   body: Let((_406, Int), Int(1), 
+// //   Add(_405, _406))},
+
+// //   {name: Label("_202"), 
+// //   old_name: _202, 
+// //   is_closure: true, 
+// //   ty: ClosureFn([Int], Int), 
+// //   args: [(_204, Int)], 
+// //   formal_free_vars: [], 
+// //   body: Add(_204, _204)}, 
+
+// //   {name: Label("_1"), 
+// //   old_name: _1, 
+// //   is_closure: true, 
+// //   ty: ClosureFn([ClosureFn([Int], Int), ClosureFn([Int], Int)], ClosureFn([Int], Int)), 
+// //   args: [(_3, ClosureFn([Int], Int)), (_4, ClosureFn([Int], Int))], 
+// //   formal_free_vars: [], 
+// //   body: MakeClosure((_5, ClosureFn([Int], Int)), 
+// //   {name: Label("_5"), actual_free_vars: [_3, _4]}, Var(_5))}, 
+
+// //   {name: Label("_5"), 
+// //   old_name: _5, 
+// //   is_closure: true, 
+// //   ty: ClosureFn([Int], Int), 
+// //   args: [(_7, Int)], 
+// //   formal_free_vars: [(_3, ClosureFn([Int], Int)), (_4, ClosureFn([Int], Int))], 
+// //   body: Let((_8, Int), CallClosure(_3, [_7]), 
+// //   CallClosure(_4, [_8]))}], 
+
 // // {fundefs: [
 // //   {name: Label("minimbt_main"), 
 // //   old_name: minimbt_main, 
@@ -76,7 +137,7 @@
 // //               (_202, ClosureFn([Tuple([Double, Double, Double])], Double)),
 // //                (_403, ClosureFn([Tuple([Double, Double, Double])], Double))], 
 // //                body: Let((_616, Double), Let((_612, Double),
-//  //Let((_608, Double),
+// //Let((_608, Double),
 // //                 CallClosure(_1, [_606]), Let((_609, Double), 
 // //                 CallClosure(_1, [_607]), FMul(_608, _609))), 
 // //                 Let((_613, Double), Let((_610, Double), 
@@ -109,7 +170,7 @@
 // //                           args: [(_3, Tuple([Double, Double, Double]))],
 // //                            formal_free_vars: [], 
 // //                            body: LetTuple([(_4, Double), (_5, Double), (_6, Double)], _3, Var(_4))}],
-    
+
 // // {fundefs: [{
 
 // //   name: Label("minimbt_main"), 
@@ -138,7 +199,7 @@
 // //   args: [(_6, Int)], 
 // //   formal_free_vars: [(_3, Int)], 
 // //   body: Add(_3, _6)}], 
-  
+
 // // old_name: minimbt_main, 
 // // is_closure: true, 
 // // ty: ClosureFn([], Unit), 
