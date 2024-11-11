@@ -88,6 +88,21 @@ fn create_label_end() -> String {
 //   }
 // }
 
+fn save()->Unit{
+   let saving_regs=[T0,T1,T2,S11]
+   riscvs.push(Addi(Sp, Sp, -saving_regs.length()*8))
+    for index = 0; index < saving_regs.length(); index = index + 1 {
+        riscvs.push(Sd(saving_regs[index], { base: Sp, offset: index*8 }))
+    }
+}
+
+fn load()->Unit{
+    let saving_regs=[T0,T1,T2,S11]
+    for index = 0; index < saving_regs.length(); index = index + 1 {
+        riscvs.push(Ld(saving_regs[index], { base: Sp, offset: index*8 }))
+    }
+    riscvs.push(Addi(Sp, Sp, saving_regs.length()*8))
+}
 fn preProcess(body : @closure.Expr, regAllocator : RegAllocator) -> Int {
   let mut res = 0
   match body {
@@ -645,7 +660,9 @@ fn processInstruction(
       }
       riscvs.push(Addi(Sp, Sp, -8))
       riscvs.push(Sd(Ra, { base: Sp, offset: 0 }))
+      save()
       riscvs.push(Call(label._))
+      load()
       riscvs.push(Ld(Ra, { base: Sp, offset: 0 }))
       riscvs.push(Addi(Sp, Sp, 8))
       match extenv[label._].unwrap() {
@@ -667,14 +684,18 @@ fn processInstruction(
     
         let closure_reg=prepareOperand(closure,reg_allocator)
         //TODO:save s11
+        
         riscvs.push(Mv(S11, closure_reg))
         let func_ptr=prepareTempReg(reg_allocator)
         riscvs.push(Ld(func_ptr, { base: closure_reg, offset: 0 }))
         riscvs.push(Addi(Sp, Sp, -8))
         riscvs.push(Sd(Ra, { base: Sp, offset: 0 }))
+        save()
         riscvs.push(Jalr(func_ptr))
+        load()
         riscvs.push(Ld(Ra, { base: Sp, offset: 0 }))
         riscvs.push(Addi(Sp, Sp, 8))
+        load()
         return reg_ret
       }
       prepareArgs(
@@ -683,7 +704,9 @@ fn processInstruction(
       )
       riscvs.push(Addi(Sp, Sp, -8))
       riscvs.push(Sd(Ra, { base: Sp, offset: 0 }))
+      save()
       riscvs.push(Call(closure.to_string()))
+      load()
       riscvs.push(Ld(Ra, { base: Sp, offset: 0 }))
       riscvs.push(Addi(Sp, Sp, 8))
       reg_ret
