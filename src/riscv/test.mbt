@@ -21,7 +21,7 @@
 // }
 
 // test {
-//   let input = @fs.read_file_to_string!(path="test/test_src/inprod.mbt")
+//   let input = @fs.read_file_to_string!(path="test/test_src/cls-bug2.mbt")
 //   let context = @parser.parse(input)
 //   let typechecked = @typing.typing!(context)
 //   println(typechecked)
@@ -39,7 +39,34 @@
 //   let asm = emit(closure_ir)
 //   println(print_functions(asm))
 // }
-// //{fundefs: [
+// // {fundefs: [
+// //   {name: Label("minimbt_main"), 
+// //   old_name: minimbt_main, 
+// //   is_closure: true, 
+// //   ty: ClosureFn([], Unit), 
+// //   args: [], 
+// //   formal_free_vars: [(_1, ClosureFn([Int], Unit))], 
+// //   body: Let((_204, Int), Int(9), 
+// //   CallClosure(_1, [_204]))}, 
+// //   {name: Label("_1"), 
+// //   old_name: _1, 
+// //   is_closure: true, 
+// //   ty: ClosureFn([Int], Unit), 
+// //   args: [(_3, Int)], 
+// //   formal_free_vars: [], 
+// //   body: Let((_11, Int), Int(0), 
+// //   IfLe(_11, _3, 
+// //   Let((_4, Unit), 
+// //   CallDirect(Label("minimbt_print_int"), [_3, _1]), 
+// //   Let((_6, Array(ClosureFn([Int], Unit))), 
+// //   Let((_5, Int), Int(1), 
+// //   CallDirect(Label("minimbt_create_ptr_array"), 
+// //   [_5, _1])), 
+// //   Let((_8, ClosureFn([Int], Unit)), 
+// //   Let((_7, Int), Int(0), 
+// //   ArrayGet(_6, _7)), Let((_10, Int), 
+// //   Let((_9, Int), Int(1), Sub(_3, _9)), 
+// //   CallClosure(_8, [_10]))))), Unit))}], 
 // //   {name: Label("minimbt_main"), 
 // //   old_name: minimbt_main, 
 // //   is_closure: true, 

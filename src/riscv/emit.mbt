@@ -554,6 +554,7 @@ fn processInstruction(
       reg1
     }
     Let((var, ty), rhs, rest) => {
+      println(var)
       let rhs_reg = processInstruction(rhs, reg_allocator)
       match ty {
         Unit => processInstruction(rest, reg_allocator)
@@ -667,27 +668,23 @@ fn processInstruction(
       T1
     }
     CallDirect(label, args) => {
-      let mut regIndex = 0
-      let mut fregIndex = 0
-      for index = 0; index < args.length(); index = index + 1 {
-        let arg = args[index]
-        let arg_location = reg_allocator.stack[arg]
-        let arg_memAccess = { base: Sp, offset: arg_location.unwrap() }
-        let arg_type = varTable[arg]
-        match arg_type.unwrap() {
-          Int(_) => {
-            riscvs.push(Lw(reg_arg_list[regIndex], arg_memAccess))
-            regIndex += 1
-          }
-          Double(_) => {
-            riscvs.push(Fld(freg_arg_list[fregIndex], arg_memAccess))
-            fregIndex += 1
-          }
-          _ => {
-            riscvs.push(Ld(reg_arg_list[regIndex], arg_memAccess))
-            regIndex += 1
-          }
-        }
+      println(label)
+      if label._ == "minimbt_create_ptr_array" {
+        riscvs.push(Li(A0, "8"))
+        riscvs.push(Addi(Sp, Sp, -8))
+        riscvs.push(Sd(Ra, { base: Sp, offset: 0 }))
+        save()
+        riscvs.push(Call("minimbt_malloc"))
+        load()
+        riscvs.push(Ld(Ra, { base: Sp, offset: 0 }))
+        riscvs.push(Addi(Sp, Sp, 8))
+        riscvs.push(
+          Sd(prepareOperand(args[1], reg_allocator), { base: A0, offset: 0 }),
+        )
+        riscvs.push(Mv(A1, A0))
+        riscvs.push(Mv(A0, prepareOperand(args[0], reg_allocator)))
+      } else {
+        prepareArgs(args, reg_allocator)
       }
       riscvs.push(Addi(Sp, Sp, -8))
       riscvs.push(Sd(Ra, { base: Sp, offset: 0 }))
@@ -805,7 +802,6 @@ fn processFunction(
   for asm in riscvs {
     res.body.push(asm)
   }
-
   match funtion.ty {
     ClosureFn(_, ClosureFn(_)) =>
       if return_reg == T5 {
