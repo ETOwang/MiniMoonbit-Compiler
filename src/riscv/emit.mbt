@@ -194,8 +194,8 @@ fn prepareOperand(expr : @types.Name, reg_allocator : RegAllocator) -> Reg {
       if not(expr_type.is_empty()) {
         match expr_type.unwrap() {
           ClosureFn(_) => {
-            riscvs.push(La(reg1, expr.to_string()))
-            return reg1
+            riscvs.push(La(T5, expr.to_string()))
+            return T5
           }
           _ => ()
         }
@@ -566,6 +566,15 @@ fn processInstruction(
           riscvs.push(Sw(rhs_reg, var_memAccess))
           processInstruction(rest, reg_allocator)
         }
+        ClosureFn(_, _) => {
+          varTable[var] = ty
+          let var_memAccess = {
+            base: Sp,
+            offset: reg_allocator.stack[var].unwrap(),
+          }
+          riscvs.push(Sd(rhs_reg, var_memAccess))
+          processInstruction(rest, reg_allocator)
+        }
         _ => {
           varTable[var] = ty
           let var_memAccess = {
@@ -796,6 +805,23 @@ fn processFunction(
   for asm in riscvs {
     res.body.push(asm)
   }
+
+  match funtion.ty {
+    ClosureFn(_, ClosureFn(_)) =>
+      if return_reg == T5 {
+        res.body.push(Li(A0, "1"))
+        res.body.push(Li(A1, "0"))
+        res.body.push(Addi(Sp, Sp, -8))
+        res.body.push(Sd(Ra, { base: Sp, offset: 0 }))
+        res.body.push(Call("minimbt_create_ptr_array"))
+        res.body.push(Ld(Ra, { base: Sp, offset: 0 }))
+        res.body.push(Addi(Sp, Sp, 8))
+        res.body.push(Mv(T3, A0))
+        res.body.push(Sd(return_reg, { base: T3, offset: 0 }))
+        res.body.push(Mv(return_reg, T3))
+      }
+    _ => ()
+  }
   res.body.push(Mv(reg_ret, return_reg))
   res.body.push(Addi(Sp, Sp, stackSize))
   res.body.push(Ret)
@@ -834,7 +860,6 @@ pub fn AssemblyFunction::output(
 }
 
 pub fn emit(input : @closure.Program) -> Array[AssemblyFunction] {
-  counter.push(0)
   end_counter.push(0)
   if_counter.push(0)
   else_counter.push(0)
@@ -844,8 +869,8 @@ pub fn emit(input : @closure.Program) -> Array[AssemblyFunction] {
       closureTable[fun.name._] = fun
     }
   }
-  let _=processIntBody(input.body)
-  let _=processDoubleBody(input.body)
+  let _ = processIntBody(input.body)
+  let _ = processDoubleBody(input.body)
   for fun in input.fundefs {
     let regAllocator = {
       available_regs: reg_allocatable_list,
