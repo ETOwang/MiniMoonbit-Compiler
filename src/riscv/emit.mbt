@@ -860,6 +860,7 @@ pub fn AssemblyFunction::output(
 }
 
 pub fn emit(input : @closure.Program) -> Array[AssemblyFunction] {
+  counter.push(0)
   end_counter.push(0)
   if_counter.push(0)
   else_counter.push(0)

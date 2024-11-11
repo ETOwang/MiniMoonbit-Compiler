@@ -21,7 +21,7 @@
 // }
 
 // test {
-//   let input = @fs.read_file_to_string!(path="test/test_src/cls-bug.mbt")
+//   let input = @fs.read_file_to_string!(path="test/test_src/inprod.mbt")
 //   let context = @parser.parse(input)
 //   let typechecked = @typing.typing!(context)
 //   println(typechecked)
