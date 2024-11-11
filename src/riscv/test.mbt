@@ -21,7 +21,7 @@
 // }
 
 // test {
-//   let input = @fs.read_file_to_string!(path="test/test_src/cls-rec.mbt")
+//   let input = @fs.read_file_to_string!(path="test/test_src/adder.mbt")
 //   let context = @parser.parse(input)
 //   let typechecked = @typing.typing!(context)
 //   println(typechecked)

@@ -197,7 +197,7 @@ fn prepareOperand(expr : @types.Name, reg_allocator : RegAllocator) -> Reg {
             riscvs.push(La(reg1, expr.to_string()))
             return reg1
           }
-          _ => @util.die("error")
+          _ => ()
         }
       }
       let mut record = 0
