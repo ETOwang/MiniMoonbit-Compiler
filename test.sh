@@ -9,7 +9,7 @@ fi
 INPUT=$1
 
 # Run moonrun with the specified input
-#moonrun target/wasm-gc/release/build/bin/bin.wasm -- test/test_src/${INPUT}.mbt -o test/test_src/${INPUT}.s
+moonrun target/wasm-gc/release/build/bin/bin.wasm -- test/test_src/${INPUT}.mbt -o test/test_src/${INPUT}.s
 
 cat test/test_src/${INPUT}.s
 # Build the executable using zig

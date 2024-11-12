@@ -21,7 +21,7 @@
 // }
 
 // test {
-//   let input = @fs.read_file_to_string!(path="test/test_src/cls-bug.mbt")
+//   let input = @fs.read_file_to_string!(path="test/test_src/cls-bug2.mbt")
 //   let context = @parser.parse(input)
 //   let typechecked = @typing.typing!(context)
 //   //println(typechecked)
@@ -37,26 +37,7 @@
 //   //println("---------------")
 //   let asm = emit(closure_ir)
 //   println(print_functions(asm))
-// }
-// {fundefs: [
-// {name: Label("minimbt_main"), 
-// old_name: minimbt_main, 
-// is_closure: true, 
-// ty: ClosureFn([], Unit), 
-// args: [], 
-// formal_free_vars: 
-// [(_202, ClosureFn([Int], ClosureFn([Int], Int)))], 
-// body: Let((_408, Int), Let((_406, ClosureFn([Int], Int)), 
-// Let((_405, Int), Int(456), 
-// CallClosure(_202, [_405])), 
-// Let((_407, Int), Int(789), 
-// CallClosure(_406, [_407]))), 
-// CallDirect(Label("minimbt_print_int"), [_408]))}, 
-// {name: Label("_202"),args: [(_204, Int)], 
-// formal_free_vars: [(_1, ClosureFn([Int], Int))], body: Var(_1)},
-//  {name: Label("_1"),
-//  formal_free_vars: [], 
-                                                           
+// }                              
 // // Let((_477, Array(Double)), 
 // // Let((_476, Int), Int(0), ArrayGet(_416, _476)), 
 // // Let((_478, Int), Int(1), ArrayGet(_477, _478))), 

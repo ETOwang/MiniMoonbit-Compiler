@@ -194,11 +194,12 @@ fn prepareOperand(expr : @types.Name, reg_allocator : RegAllocator) -> Reg {
       if not(expr_type.is_empty())&&not(closureTable[expr.to_string()].is_empty()) {
         match expr_type.unwrap() {
           ClosureFn(_) => {
-            callCreatePtrArray(1)
-            riscvs.push(La(T5, expr.to_string()))
-            riscvs.push(Sd(T5, { base: A0, offset: 0 }))
-            riscvs.push(Mv(T5, A0))
-            return T5
+            let reg=callMalloc(8)
+            let temp=prepareTempReg(reg_allocator)
+            riscvs.push(La(temp, expr.to_string()))
+            riscvs.push(Sd(temp, { base:reg, offset: 0 }))
+            riscvs.push(Mv(temp, reg))
+            return temp
           }
           _ => ()
         }
@@ -334,16 +335,22 @@ fn prepareTempReg(reg_allocator : RegAllocator) -> Reg {
   temp_reg
 }
 
-fn callMalloc(size : Int) -> Unit {
+fn callMalloc(size : Int) -> Reg{
+  riscvs.push(Mv(T6,A0))
   riscvs.push(Li(A0, size.to_string()))
   riscvs.push(Addi(Sp, Sp, -8))
   riscvs.push(Sd(Ra, { base: Sp, offset: 0 }))
   riscvs.push(Call("minimbt_malloc"))
   riscvs.push(Ld(Ra, { base: Sp, offset: 0 }))
   riscvs.push(Addi(Sp, Sp, 8))
+  riscvs.push(Mv(T5,A0))
+  riscvs.push(Mv(A0,T6))
+  T5
 }
 
-fn callCreatePtrArray(size : Int) -> Unit {
+fn callCreatePtrArray(size : Int) -> Reg {
+  riscvs.push(Mv(T6,A0))
+  riscvs.push(Mv(T4,A1))
   riscvs.push(Li(A0, size.to_string()))
   riscvs.push(Li(A1, "0"))
   riscvs.push(Addi(Sp, Sp, -8))
@@ -351,6 +358,10 @@ fn callCreatePtrArray(size : Int) -> Unit {
   riscvs.push(Call("minimbt_create_ptr_array"))
   riscvs.push(Ld(Ra, { base: Sp, offset: 0 }))
   riscvs.push(Addi(Sp, Sp, 8))
+  riscvs.push(Mv(T5,A0))
+  riscvs.push(Mv(A0,T6))
+  riscvs.push(Mv(A1,T4))
+  T5
 }
 
 fn createClosure(
@@ -358,35 +369,34 @@ fn createClosure(
   closure : @closure.Closure,
   regAllocator : RegAllocator
 ) -> Reg {
-  callCreatePtrArray(size + 1)
-  riscvs.push(Mv(T3, A0))
+  let reg_array=callCreatePtrArray(size + 1)
   let func_ptr = prepareTempReg(regAllocator)
   riscvs.push(La(func_ptr, closure.name._))
-  riscvs.push(Sd(func_ptr, { base: T3, offset: 0 }))
+  riscvs.push(Sd(func_ptr, { base: reg_array, offset: 0 }))
   for index = 0; index < closure.actual_free_vars.length(); index = index + 1 {
     let fv_name = closure.actual_free_vars[index]
     match varTable[fv_name].unwrap() {
       Int(_) => {
         let temp = prepareOperand(fv_name, regAllocator)
-        callMalloc(4)
-        riscvs.push(Sw(temp, { base: A0, offset: 0 }))
-        riscvs.push(Sd(A0, { base: T3, offset: 8 * (index + 1) }))
+        let reg=callMalloc(4)
+        riscvs.push(Sw(temp, { base: reg, offset: 0 }))
+        riscvs.push(Sd(reg, { base: reg_array, offset: 8 * (index + 1) }))
       }
       Double(_) => {
         let temp = prepareFOperand(fv_name, regAllocator)
-        callMalloc(8)
-        riscvs.push(Fsd(temp, { base: A0, offset: 0 }))
-        riscvs.push(Sd(A0, { base: T3, offset: 8 * (index + 1) }))
+        let reg=callMalloc(8)
+        riscvs.push(Fsd(temp, { base: reg, offset: 0 }))
+        riscvs.push(Sd(reg, { base: reg_array, offset: 8 * (index + 1) }))
       }
       _ => {
         let temp = prepareOperand(fv_name, regAllocator)
-        callMalloc(8)
-        riscvs.push(Sd(temp, { base: A0, offset: 0 }))
-        riscvs.push(Sd(A0, { base: T3, offset: 8 * (index + 1) }))
+        let reg=callMalloc(8)
+        riscvs.push(Sd(temp, { base: reg, offset: 0 }))
+        riscvs.push(Sd(reg, { base: reg_array, offset: 8 * (index + 1) }))
       }
     }
   }
-  T3
+  reg_array
 }
 
 fn processInstruction(
@@ -397,33 +407,32 @@ fn processInstruction(
     //TODO
     Unit => T0
     MakeTuple(vars) => {
-      callCreatePtrArray(vars.length())
+      let reg_array=callCreatePtrArray(vars.length())
       //todo:t3
-      riscvs.push(Mv(T3, A0))
       for index = 0; index < vars.length(); index = index + 1 {
         let var = vars[index]
         match varTable[var].unwrap() {
           Int(_) => {
-            callMalloc(4)
+            let reg=callMalloc(4)
             let temp = prepareOperand(var, reg_allocator)
-            riscvs.push(Sw(temp, { base: A0, offset: 0 }))
-            riscvs.push(Sd(A0, { base: T3, offset: 8 * index }))
+            riscvs.push(Sw(temp, { base: reg, offset: 0 }))
+            riscvs.push(Sd(reg, { base: reg_array, offset: 8 * index }))
           }
           Double(_) => {
-            callMalloc(8)
+            let reg=callMalloc(8)
             let temp = prepareFOperand(var, reg_allocator)
-            riscvs.push(Fsd(temp, { base: A0, offset: 0 }))
-            riscvs.push(Sd(A0, { base: T3, offset: 8 * index }))
+            riscvs.push(Fsd(temp, { base: reg, offset: 0 }))
+            riscvs.push(Sd(reg, { base: reg_array, offset: 8 * index }))
           }
           _ => {
-            callMalloc(8)
+            let reg=callMalloc(8)
             let temp = prepareOperand(var, reg_allocator)
-            riscvs.push(Sd(temp, { base: A0, offset: 0 }))
-            riscvs.push(Sd(A0, { base: T3, offset: 8 * index }))
+            riscvs.push(Sd(temp, { base: reg, offset: 0 }))
+            riscvs.push(Sd(reg, { base: reg_array, offset: 8 * index }))
           }
         }
       }
-      T3
+      reg_array
     }
     LetTuple(vars, tuple, rest) => {
       let tuple_reg = prepareOperand(tuple, reg_allocator)
@@ -681,21 +690,7 @@ fn processInstruction(
       }
     }
     CallDirect(label, args) => {
-      if label._ == "minimbt_create_ptr_array" {
-        riscvs.push(Li(A0, "8"))
-        riscvs.push(Addi(Sp, Sp, -8))
-        riscvs.push(Sd(Ra, { base: Sp, offset: 0 }))
-        riscvs.push(Call("minimbt_malloc"))
-        riscvs.push(Ld(Ra, { base: Sp, offset: 0 }))
-        riscvs.push(Addi(Sp, Sp, 8))
-        riscvs.push(
-          Sd(prepareOperand(args[1], reg_allocator), { base: A0, offset: 0 }),
-        )
-        riscvs.push(Mv(A1, A0))
-        riscvs.push(Mv(A0, prepareOperand(args[0], reg_allocator)))
-      } else {
-        prepareArgs(args, reg_allocator)
-      }
+      prepareArgs(args, reg_allocator)
       riscvs.push(Addi(Sp, Sp, -8))
       riscvs.push(Sd(Ra, { base: Sp, offset: 0 }))
       
