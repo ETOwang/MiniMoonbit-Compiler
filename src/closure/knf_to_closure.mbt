@@ -48,12 +48,18 @@ pub fn add_to_array(
   new_elements : Array[Name]
 ) -> Array[Name] {
   //TODO:引用传递
+  let res:Array[Name]=Array::new()
   for elem in new_elements {
-    if not(arr.contains(elem)) {
-      arr.push(elem)
+    if not(res.contains(elem)) {
+      res.push(elem)
     }
   }
-  arr
+   for elem in arr {
+    if not(res.contains(elem)) {
+      res.push(elem)
+    }
+  }
+  res
 }
 
 pub fn union(arr1 : Array[Name], arr2 : Array[Name]) -> Array[Name] {
@@ -62,10 +68,14 @@ pub fn union(arr1 : Array[Name], arr2 : Array[Name]) -> Array[Name] {
 
 pub fn unite(arr1 : Array[FuncDef], arr2 : Array[FuncDef]) -> Array[FuncDef] {
   //TODO:引用传递
+  let res:Array[FuncDef]=Array::new()
   for elem in arr2 {
-    arr1.push(elem)
+    res.push(elem)
   }
-  arr1
+  for elem in arr1 {    
+  res.push(elem)
+  }
+ res
 }
 
 pub fn remove(element : Name, arr : Array[Name]) -> Array[Name] {
@@ -192,8 +202,12 @@ pub fn knf_program_to_closure(
     Get(x, y) => { fundefs: [], body: ArrayGet(x, y) }
     Put(x, y, z) => { fundefs: [], body: ArrayPut(x, y, z) }
     ExternalArray(x) => { fundefs: [], body: ExternalArray(x.to_string()) }
-    ExternalFunctionApplication(name, xs) =>
+    ExternalFunctionApplication(name, xs) => {
+      if name == "minimbt_print_endline" {
+        println(xs)
+      }
       { fundefs: [], body: CallDirect(name, xs) }
+    }
   }
   // 处理函数调用
 }

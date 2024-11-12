@@ -15,7 +15,7 @@ pub let extenv : Map[String, @types.Type] = {
   "minimbt_print_int": Unit,
   "minimbt_read_char": Int,
   "minimbt_print_char": Unit,
-  "minimbt_print_newline": Unit,
+  "minimbt_print_endline": Unit,
   "minimbt_create_array": @types.Type::Array(Int),
   "minimbt_create_float_array": @types.Type::Array(Double),
   "minimbt_create_ptr_array": @types.Type::Array(Ptr),
@@ -105,19 +105,19 @@ fn processDoubleBody(body : @closure.Expr) -> Double {
 }
 
 fn save() -> Unit {
-   let saving_regs=[T3]
-   riscvs.push(Addi(Sp, Sp, -saving_regs.length()*8))
-    for index = 0; index < saving_regs.length(); index = index + 1 {
-        riscvs.push(Sd(saving_regs[index], { base: Sp, offset: index*8 }))
-    }
+  //  let saving_regs=[T3,S11]
+  //  riscvs.push(Addi(Sp, Sp, -saving_regs.length()*8))
+  //   for index = 0; index < saving_regs.length(); index = index + 1 {
+  //       riscvs.push(Sd(saving_regs[index], { base: Sp, offset: index*8 }))
+  //   }
 }
 
 fn load() -> Unit {
-  let saving_regs=[T3]
-  for index = 0; index < saving_regs.length(); index = index + 1 {
-      riscvs.push(Ld(saving_regs[index], { base: Sp, offset: index*8 }))
-  }
-  riscvs.push(Addi(Sp, Sp, saving_regs.length()*8))
+  // let saving_regs=[T3,S11]
+  // for index = 0; index < saving_regs.length(); index = index + 1 {
+  //     riscvs.push(Ld(saving_regs[index], { base: Sp, offset: index*8 }))
+  // }
+  // riscvs.push(Addi(Sp, Sp, saving_regs.length()*8))
 }
 
 fn preProcess(body : @closure.Expr, regAllocator : RegAllocator) -> Int {
@@ -194,7 +194,10 @@ fn prepareOperand(expr : @types.Name, reg_allocator : RegAllocator) -> Reg {
       if not(expr_type.is_empty())&&not(closureTable[expr.to_string()].is_empty()) {
         match expr_type.unwrap() {
           ClosureFn(_) => {
+            callCreatePtrArray(1)
             riscvs.push(La(T5, expr.to_string()))
+            riscvs.push(Sd(T5, { base: A0, offset: 0 }))
+            riscvs.push(Mv(T5, A0))
             return T5
           }
           _ => ()
@@ -335,9 +338,7 @@ fn callMalloc(size : Int) -> Unit {
   riscvs.push(Li(A0, size.to_string()))
   riscvs.push(Addi(Sp, Sp, -8))
   riscvs.push(Sd(Ra, { base: Sp, offset: 0 }))
-  save()
   riscvs.push(Call("minimbt_malloc"))
-  load()
   riscvs.push(Ld(Ra, { base: Sp, offset: 0 }))
   riscvs.push(Addi(Sp, Sp, 8))
 }
@@ -680,14 +681,11 @@ fn processInstruction(
       }
     }
     CallDirect(label, args) => {
-      println(label)
       if label._ == "minimbt_create_ptr_array" {
         riscvs.push(Li(A0, "8"))
         riscvs.push(Addi(Sp, Sp, -8))
         riscvs.push(Sd(Ra, { base: Sp, offset: 0 }))
-        save()
         riscvs.push(Call("minimbt_malloc"))
-        load()
         riscvs.push(Ld(Ra, { base: Sp, offset: 0 }))
         riscvs.push(Addi(Sp, Sp, 8))
         riscvs.push(
@@ -700,9 +698,9 @@ fn processInstruction(
       }
       riscvs.push(Addi(Sp, Sp, -8))
       riscvs.push(Sd(Ra, { base: Sp, offset: 0 }))
-      save()
+      
       riscvs.push(Call(label._))
-      load()
+      
       riscvs.push(Ld(Ra, { base: Sp, offset: 0 }))
       riscvs.push(Addi(Sp, Sp, 8))
       match extenv[label._].unwrap() {
@@ -717,6 +715,7 @@ fn processInstruction(
     CallClosure(closure, args) => {
       let temp = closureTable[closure.to_string()]
       if temp.is_empty() {
+        save()
         prepareArgs(args, reg_allocator)
         let closure_reg = prepareOperand(closure, reg_allocator)
         //TODO:save s11
@@ -725,29 +724,33 @@ fn processInstruction(
         riscvs.push(Ld(func_ptr, { base: closure_reg, offset: 0 }))
         riscvs.push(Addi(Sp, Sp, -8))
         riscvs.push(Sd(Ra, { base: Sp, offset: 0 }))
-        save()
+        
         riscvs.push(Jalr(func_ptr))
-        load()
+       
         riscvs.push(Ld(Ra, { base: Sp, offset: 0 }))
         riscvs.push(Addi(Sp, Sp, 8))
+         load()
         return reg_ret
       }
-      let func=temp.unwrap()
-      let actual_free_vars = Array::new()
-      for fv in func.formal_free_vars {
-        actual_free_vars.push(fv.0)
-      }
-      let cls:@closure.Closure={name:func.name,actual_free_vars:actual_free_vars}
-      let closure_reg=createClosure(func.formal_free_vars.length(), cls, reg_allocator)
-      riscvs.push(Mv(S11, closure_reg))
+      // let func=temp.unwrap()
+      // let actual_free_vars = Array::new()
+      // for fv in func.formal_free_vars {
+      //   if(closureTable[fv.0.to_string()].is_empty()){
+      //   actual_free_vars.push(fv.0)
+      //   }
+      // }
+      //let cls:@closure.Closure={name:func.name,actual_free_vars:actual_free_vars}
+      //let closure_reg=createClosure(func.formal_free_vars.length(), cls, reg_allocator)
+      save()
+      //riscvs.push(Mv(S11, closure_reg))
       prepareArgs(args, reg_allocator)
       riscvs.push(Addi(Sp, Sp, -8))
       riscvs.push(Sd(Ra, { base: Sp, offset: 0 }))
-      save()
       riscvs.push(Call(closure.to_string()))
-      load()
+
       riscvs.push(Ld(Ra, { base: Sp, offset: 0 }))
       riscvs.push(Addi(Sp, Sp, 8))
+       load()
       reg_ret
     }
   }
@@ -819,22 +822,6 @@ fn processFunction(
   let return_reg = processInstruction(funtion.body, reg_allocator)
   for asm in riscvs {
     res.body.push(asm)
-  }
-  match funtion.ty {
-    ClosureFn(_, ClosureFn(_)) =>
-      if return_reg == T5 {
-        res.body.push(Li(A0, "1"))
-        res.body.push(Li(A1, "0"))
-        res.body.push(Addi(Sp, Sp, -8))
-        res.body.push(Sd(Ra, { base: Sp, offset: 0 }))
-        res.body.push(Call("minimbt_create_ptr_array"))
-        res.body.push(Ld(Ra, { base: Sp, offset: 0 }))
-        res.body.push(Addi(Sp, Sp, 8))
-        res.body.push(Mv(T3, A0))
-        res.body.push(Sd(return_reg, { base: T3, offset: 0 }))
-        res.body.push(Mv(return_reg, T3))
-      }
-    _ => ()
   }
   res.body.push(Mv(reg_ret, return_reg))
   res.body.push(Addi(Sp, Sp, stackSize))
