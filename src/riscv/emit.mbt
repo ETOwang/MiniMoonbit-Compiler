@@ -52,6 +52,8 @@ let externalVar : @hashmap.T[String, Int] = @hashmap.new()
 
 let externalFVar : @hashmap.T[String, Double] = @hashmap.new()
 
+let isMakeClosure : @hashmap.T[String, Bool] = @hashmap.new()
+
 fn create_label_else() -> String {
   let temp = "else_" + else_counter[0].to_string()
   else_counter[0] += 1
@@ -191,13 +193,17 @@ fn prepareOperand(expr : @types.Name, reg_allocator : RegAllocator) -> Reg {
         return reg1
       }
       let expr_type = varTable[expr]
-      if not(expr_type.is_empty())&&not(closureTable[expr.to_string()].is_empty()) {
+      if not(expr_type.is_empty()) &&
+        not(
+          closureTable[expr.to_string()].is_empty() &&
+          isMakeClosure[expr.to_string()].is_empty(),
+        ) {
         match expr_type.unwrap() {
           ClosureFn(_) => {
-            let reg=callMalloc(8)
-            let temp=prepareTempReg(reg_allocator)
+            let reg = callMalloc(8,reg_allocator)
+            let temp = prepareTempReg(reg_allocator)
             riscvs.push(La(temp, expr.to_string()))
-            riscvs.push(Sd(temp, { base:reg, offset: 0 }))
+            riscvs.push(Sd(temp, { base: reg, offset: 0 }))
             riscvs.push(Mv(temp, reg))
             return temp
           }
@@ -208,7 +214,7 @@ fn prepareOperand(expr : @types.Name, reg_allocator : RegAllocator) -> Reg {
         let fv_var = reg_allocator.fv_list[index]
         if fv_var.0 == expr {
           let temp = prepareTempReg(reg_allocator)
-          riscvs.push(Ld(temp, { base: S11, offset: 8*(index+1) }))
+          riscvs.push(Ld(temp, { base: S11, offset: 8 * (index + 1) }))
           match fv_var.1 {
             Int(_) => {
               riscvs.push(Lw(temp, { base: temp, offset: 0 }))
@@ -244,7 +250,7 @@ fn prepareFOperand(expr : @types.Name, reg_allocator : RegAllocator) -> FReg {
         let fv_var = reg_allocator.fv_list[index]
         if fv_var.0 == expr {
           let temp = prepareTempReg(reg_allocator)
-          riscvs.push(Ld(temp, { base: S11, offset: 8*(index+1) }))
+          riscvs.push(Ld(temp, { base: S11, offset: 8 * (index + 1) }))
           match fv_var.1 {
             Double(_) => {
               let ftemp = prepareTempFReg(reg_allocator)
@@ -328,29 +334,34 @@ fn prepareTempFReg(reg_allocator : RegAllocator) -> FReg {
 }
 
 fn prepareTempReg(reg_allocator : RegAllocator) -> Reg {
-  let temp_list = [T0, T1, T2]
+  let temp_list = [T0, T1, T2,T3,T4,T5,T6]
   let temp_reg = temp_list[reg_allocator.temp_index]
   reg_allocator.temp_index += 1
   reg_allocator.temp_index %= temp_list.length()
   temp_reg
 }
 
-fn callMalloc(size : Int) -> Reg{
-  riscvs.push(Mv(T6,A0))
+fn callMalloc(size : Int, regAllocator : RegAllocator) -> Reg {
+  let temp = prepareTempReg(regAllocator)
+  let res = prepareTempReg(regAllocator)
+  riscvs.push(Mv(temp, A0))
   riscvs.push(Li(A0, size.to_string()))
   riscvs.push(Addi(Sp, Sp, -8))
   riscvs.push(Sd(Ra, { base: Sp, offset: 0 }))
   riscvs.push(Call("minimbt_malloc"))
   riscvs.push(Ld(Ra, { base: Sp, offset: 0 }))
   riscvs.push(Addi(Sp, Sp, 8))
-  riscvs.push(Mv(T5,A0))
-  riscvs.push(Mv(A0,T6))
-  T5
+  riscvs.push(Mv(res, A0))
+  riscvs.push(Mv(A0, temp))
+  res
 }
 
-fn callCreatePtrArray(size : Int) -> Reg {
-  riscvs.push(Mv(T6,A0))
-  riscvs.push(Mv(T4,A1))
+fn callCreatePtrArray(size : Int, regAllocator : RegAllocator) -> Reg {
+  let temp = prepareTempReg(regAllocator)
+  let temp2 = prepareTempReg(regAllocator)
+  let res = prepareTempReg(regAllocator)
+  riscvs.push(Mv(temp, A0))
+  riscvs.push(Mv(temp2, A1))
   riscvs.push(Li(A0, size.to_string()))
   riscvs.push(Li(A1, "0"))
   riscvs.push(Addi(Sp, Sp, -8))
@@ -358,10 +369,10 @@ fn callCreatePtrArray(size : Int) -> Reg {
   riscvs.push(Call("minimbt_create_ptr_array"))
   riscvs.push(Ld(Ra, { base: Sp, offset: 0 }))
   riscvs.push(Addi(Sp, Sp, 8))
-  riscvs.push(Mv(T5,A0))
-  riscvs.push(Mv(A0,T6))
-  riscvs.push(Mv(A1,T4))
-  T5
+  riscvs.push(Mv(res, A0))
+  riscvs.push(Mv(A0, temp))
+  riscvs.push(Mv(A1, temp2))
+  res
 }
 
 fn createClosure(
@@ -369,7 +380,7 @@ fn createClosure(
   closure : @closure.Closure,
   regAllocator : RegAllocator
 ) -> Reg {
-  let reg_array=callCreatePtrArray(size + 1)
+  let reg_array = callCreatePtrArray(size + 1,regAllocator)
   let func_ptr = prepareTempReg(regAllocator)
   riscvs.push(La(func_ptr, closure.name._))
   riscvs.push(Sd(func_ptr, { base: reg_array, offset: 0 }))
@@ -378,19 +389,19 @@ fn createClosure(
     match varTable[fv_name].unwrap() {
       Int(_) => {
         let temp = prepareOperand(fv_name, regAllocator)
-        let reg=callMalloc(4)
+        let reg = callMalloc(4,regAllocator)
         riscvs.push(Sw(temp, { base: reg, offset: 0 }))
         riscvs.push(Sd(reg, { base: reg_array, offset: 8 * (index + 1) }))
       }
       Double(_) => {
         let temp = prepareFOperand(fv_name, regAllocator)
-        let reg=callMalloc(8)
+        let reg = callMalloc(8,regAllocator)
         riscvs.push(Fsd(temp, { base: reg, offset: 0 }))
         riscvs.push(Sd(reg, { base: reg_array, offset: 8 * (index + 1) }))
       }
       _ => {
         let temp = prepareOperand(fv_name, regAllocator)
-        let reg=callMalloc(8)
+        let reg = callMalloc(8,regAllocator)
         riscvs.push(Sd(temp, { base: reg, offset: 0 }))
         riscvs.push(Sd(reg, { base: reg_array, offset: 8 * (index + 1) }))
       }
@@ -407,25 +418,25 @@ fn processInstruction(
     //TODO
     Unit => T0
     MakeTuple(vars) => {
-      let reg_array=callCreatePtrArray(vars.length())
+      let reg_array = callCreatePtrArray(vars.length(),reg_allocator)
       //todo:t3
       for index = 0; index < vars.length(); index = index + 1 {
         let var = vars[index]
         match varTable[var].unwrap() {
           Int(_) => {
-            let reg=callMalloc(4)
+            let reg = callMalloc(4,reg_allocator)
             let temp = prepareOperand(var, reg_allocator)
             riscvs.push(Sw(temp, { base: reg, offset: 0 }))
             riscvs.push(Sd(reg, { base: reg_array, offset: 8 * index }))
           }
           Double(_) => {
-            let reg=callMalloc(8)
+            let reg = callMalloc(8,reg_allocator)
             let temp = prepareFOperand(var, reg_allocator)
             riscvs.push(Fsd(temp, { base: reg, offset: 0 }))
             riscvs.push(Sd(reg, { base: reg_array, offset: 8 * index }))
           }
           _ => {
-            let reg=callMalloc(8)
+            let reg = callMalloc(8,reg_allocator)
             let temp = prepareOperand(var, reg_allocator)
             riscvs.push(Sd(temp, { base: reg, offset: 0 }))
             riscvs.push(Sd(reg, { base: reg_array, offset: 8 * index }))
@@ -467,13 +478,11 @@ fn processInstruction(
         offset: reg_allocator.stack[var].unwrap(),
       }
       riscvs.push(Sd(closure_reg, closure_memAccess))
+      isMakeClosure[var.to_string()] = true
       processInstruction(rest, reg_allocator)
     }
     ExternalArray(label) => {
-      let label_location = { base: Sp, offset: 0 }
-      riscvs.push(La(T0, label._))
-      riscvs.push(Sd(T0, label_location))
-      T0
+      @util.die("externalarray")
     }
     //TODO
     Int(value) => {
@@ -508,7 +517,7 @@ fn processInstruction(
     Div(lhs, rhs) => {
       let (reg1, reg2) = prepareOperands(lhs, rhs, reg_allocator)
       riscvs.push(Div(reg1, reg1, reg2))
-      T0
+      reg1
     }
     FAdd(lhs, rhs) => {
       let temp = prepareTempReg(reg_allocator)
@@ -655,22 +664,22 @@ fn processInstruction(
       }
     }
     ArrayPut(arr, idx, value) => {
-      let arr_reg=prepareOperand(arr, reg_allocator)
-      let idx_reg=prepareOperand(idx, reg_allocator)
-      let value_ty=varTable[value].unwrap()
+      let arr_reg = prepareOperand(arr, reg_allocator)
+      let idx_reg = prepareOperand(idx, reg_allocator)
+      let value_ty = varTable[value].unwrap()
       match value_ty {
         Int(_) => {
-          let value_reg=prepareOperand(value, reg_allocator)
-          let temp=prepareTempReg(reg_allocator)
+          let value_reg = prepareOperand(value, reg_allocator)
+          let temp = prepareTempReg(reg_allocator)
           riscvs.push(Li(temp, "4"))
           riscvs.push(Mul(idx_reg, temp, idx_reg))
           riscvs.push(Add(arr_reg, arr_reg, idx_reg))
           riscvs.push(Sw(value_reg, { base: arr_reg, offset: 0 }))
           value_reg
         }
-        Double=> {
-          let value_reg=prepareFOperand(value, reg_allocator)
-          let temp=prepareTempReg(reg_allocator)
+        Double => {
+          let value_reg = prepareFOperand(value, reg_allocator)
+          let temp = prepareTempReg(reg_allocator)
           riscvs.push(Li(temp, "8"))
           riscvs.push(Mul(idx_reg, temp, idx_reg))
           riscvs.push(Add(arr_reg, arr_reg, idx_reg))
@@ -679,8 +688,8 @@ fn processInstruction(
           temp
         }
         _ => {
-          let value_reg=prepareOperand(value, reg_allocator)
-          let temp=prepareTempReg(reg_allocator)
+          let value_reg = prepareOperand(value, reg_allocator)
+          let temp = prepareTempReg(reg_allocator)
           riscvs.push(Li(temp, "8"))
           riscvs.push(Mul(idx_reg, temp, idx_reg))
           riscvs.push(Add(arr_reg, arr_reg, idx_reg))
@@ -693,9 +702,7 @@ fn processInstruction(
       prepareArgs(args, reg_allocator)
       riscvs.push(Addi(Sp, Sp, -8))
       riscvs.push(Sd(Ra, { base: Sp, offset: 0 }))
-      
       riscvs.push(Call(label._))
-      
       riscvs.push(Ld(Ra, { base: Sp, offset: 0 }))
       riscvs.push(Addi(Sp, Sp, 8))
       match extenv[label._].unwrap() {
@@ -719,12 +726,10 @@ fn processInstruction(
         riscvs.push(Ld(func_ptr, { base: closure_reg, offset: 0 }))
         riscvs.push(Addi(Sp, Sp, -8))
         riscvs.push(Sd(Ra, { base: Sp, offset: 0 }))
-        
         riscvs.push(Jalr(func_ptr))
-       
         riscvs.push(Ld(Ra, { base: Sp, offset: 0 }))
         riscvs.push(Addi(Sp, Sp, 8))
-         load()
+        load()
         return reg_ret
       }
       // let func=temp.unwrap()
@@ -742,10 +747,9 @@ fn processInstruction(
       riscvs.push(Addi(Sp, Sp, -8))
       riscvs.push(Sd(Ra, { base: Sp, offset: 0 }))
       riscvs.push(Call(closure.to_string()))
-
       riscvs.push(Ld(Ra, { base: Sp, offset: 0 }))
       riscvs.push(Addi(Sp, Sp, 8))
-       load()
+      load()
       reg_ret
     }
   }
