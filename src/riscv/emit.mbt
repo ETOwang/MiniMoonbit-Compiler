@@ -54,6 +54,7 @@ let externalFVar : @hashmap.T[String, Double] = @hashmap.new()
 
 let isMakeClosure : @hashmap.T[String, Bool] = @hashmap.new()
 
+let curFunction:Array[String]=Array::new()
 fn create_label_else() -> String {
   let temp = "else_" + else_counter[0].to_string()
   else_counter[0] += 1
@@ -715,8 +716,12 @@ fn processInstruction(
       }
     }
     CallClosure(closure, args) => {
+      riscvs.push(Comment("start callClosure"))
+      riscvs.push(Comment(closure.to_string()))
+      riscvs.push(Comment(curFunction[0]))
       let temp = closureTable[closure.to_string()]
-      if temp.is_empty() {
+      if (curFunction[0]!=closure.to_string()&&(temp.is_empty()||not(isMakeClosure[closure.to_string()].is_empty()))) {
+        riscvs.push(Comment("here"))
         save()
         prepareArgs(args, reg_allocator)
         let closure_reg = prepareOperand(closure, reg_allocator)
@@ -750,6 +755,7 @@ fn processInstruction(
       riscvs.push(Ld(Ra, { base: Sp, offset: 0 }))
       riscvs.push(Addi(Sp, Sp, 8))
       load()
+      riscvs.push(Comment("end callClosure"))
       reg_ret
     }
   }
@@ -774,6 +780,7 @@ fn processFunction(
       data: Array::new(),
     }
   }
+  curFunction[0]=funtion.name._
   let stackSize : Int = preProcess(funtion.body, reg_allocator) +
     funtion.args.length() * 8
   res.body.push(Addi(Sp, Sp, -stackSize))
@@ -860,6 +867,7 @@ pub fn AssemblyFunction::output(
 }
 
 pub fn emit(input : @closure.Program) -> Array[AssemblyFunction] {
+  curFunction.push("NULL")
   counter.push(0)
   end_counter.push(0)
   if_counter.push(0)
