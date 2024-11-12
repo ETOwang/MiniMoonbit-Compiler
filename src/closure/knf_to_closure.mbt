@@ -202,12 +202,8 @@ pub fn knf_program_to_closure(
     Get(x, y) => { fundefs: [], body: ArrayGet(x, y) }
     Put(x, y, z) => { fundefs: [], body: ArrayPut(x, y, z) }
     ExternalArray(x) => { fundefs: [], body: ExternalArray(x.to_string()) }
-    ExternalFunctionApplication(name, xs) => {
-      if name == "minimbt_print_endline" {
-        println(xs)
-      }
+    ExternalFunctionApplication(name, xs) => 
       { fundefs: [], body: CallDirect(name, xs) }
-    }
   }
   // 处理函数调用
 }
