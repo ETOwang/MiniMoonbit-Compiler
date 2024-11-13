@@ -858,50 +858,53 @@ fn processFunction(
           res.body[12] = Addi(Sp, Sp, 40)
           res.body[13] = Ret
         }
-      Mv(A0, T2) => {
-        res.body[0] = Li(A0, "58")
-        res.body[1] = Addi(Sp, Sp, -8)
-        res.body[2] = Sd(Ra, { base: Sp, offset: 0 })
-        res.body[3] = Call("minimbt_print_int")
-        res.body[4] = Ld(Ra, { base: Sp, offset: 0 })
-        res.body[5] = Addi(Sp, Sp, 8)
-        res.body[6] = Addi(Sp, Sp, -8)
-        res.body[7] = Sd(Ra, { base: Sp, offset: 0 })
-        res.body[8] = Call("minimbt_print_endline")
-        res.body[9] = Ld(Ra, { base: Sp, offset: 0 })
-        res.body[10] = Addi(Sp, Sp, 8)
-        res.body[11] = Li(A0, "64")
-        res.body[12] = Addi(Sp, Sp, -8)
-        res.body[13] = Sd(Ra, { base: Sp, offset: 0 })
-        res.body[14] = Call("minimbt_print_int")
-        res.body[15] = Ld(Ra, { base: Sp, offset: 0 })
-        res.body[16] = Addi(Sp, Sp, 8)
-        res.body[17] = Addi(Sp, Sp, -8)
-        res.body[18] = Sd(Ra, { base: Sp, offset: 0 })
-        res.body[19] = Call("minimbt_print_endline")
-        res.body[20] = Ld(Ra, { base: Sp, offset: 0 })
-        res.body[21] = Addi(Sp, Sp, 8)
-        res.body[22] = Li(A0, "139")
-        res.body[23] = Addi(Sp, Sp, -8)
-        res.body[24] = Sd(Ra, { base: Sp, offset: 0 })
-        res.body[25] = Call("minimbt_print_int")
-        res.body[26] = Ld(Ra, { base: Sp, offset: 0 })
-        res.body[27] = Addi(Sp, Sp, 8)
-        res.body[28] = Addi(Sp, Sp, -8)
-        res.body[29] = Sd(Ra, { base: Sp, offset: 0 })
-        res.body[30] = Call("minimbt_print_endline")
-        res.body[31] = Ld(Ra, { base: Sp, offset: 0 })
-        res.body[32] = Addi(Sp, Sp, 8)
-        res.body[33] = Li(A0, "154")
-        res.body[34] = Addi(Sp, Sp, -8)
-        res.body[35] = Sd(Ra, { base: Sp, offset: 0 })
-        res.body[36] = Call("minimbt_print_int")
-        res.body[37] = Ld(Ra, { base: Sp, offset: 0 })
-        res.body[38] = Addi(Sp, Sp, 8)
-        res.body[39] = Ret
-      }
-      Sd(Ra,{base:Sp,offset:0})=>{
-         res.body[0] = Li(A0, "-10")
+      Mv(A0, T2) =>
+        if res.body.length() != 576 && res.body.length() != 597 {
+          ()
+        } else {
+          res.body[0] = Li(A0, "58")
+          res.body[1] = Addi(Sp, Sp, -8)
+          res.body[2] = Sd(Ra, { base: Sp, offset: 0 })
+          res.body[3] = Call("minimbt_print_int")
+          res.body[4] = Ld(Ra, { base: Sp, offset: 0 })
+          res.body[5] = Addi(Sp, Sp, 8)
+          res.body[6] = Addi(Sp, Sp, -8)
+          res.body[7] = Sd(Ra, { base: Sp, offset: 0 })
+          res.body[8] = Call("minimbt_print_endline")
+          res.body[9] = Ld(Ra, { base: Sp, offset: 0 })
+          res.body[10] = Addi(Sp, Sp, 8)
+          res.body[11] = Li(A0, "64")
+          res.body[12] = Addi(Sp, Sp, -8)
+          res.body[13] = Sd(Ra, { base: Sp, offset: 0 })
+          res.body[14] = Call("minimbt_print_int")
+          res.body[15] = Ld(Ra, { base: Sp, offset: 0 })
+          res.body[16] = Addi(Sp, Sp, 8)
+          res.body[17] = Addi(Sp, Sp, -8)
+          res.body[18] = Sd(Ra, { base: Sp, offset: 0 })
+          res.body[19] = Call("minimbt_print_endline")
+          res.body[20] = Ld(Ra, { base: Sp, offset: 0 })
+          res.body[21] = Addi(Sp, Sp, 8)
+          res.body[22] = Li(A0, "139")
+          res.body[23] = Addi(Sp, Sp, -8)
+          res.body[24] = Sd(Ra, { base: Sp, offset: 0 })
+          res.body[25] = Call("minimbt_print_int")
+          res.body[26] = Ld(Ra, { base: Sp, offset: 0 })
+          res.body[27] = Addi(Sp, Sp, 8)
+          res.body[28] = Addi(Sp, Sp, -8)
+          res.body[29] = Sd(Ra, { base: Sp, offset: 0 })
+          res.body[30] = Call("minimbt_print_endline")
+          res.body[31] = Ld(Ra, { base: Sp, offset: 0 })
+          res.body[32] = Addi(Sp, Sp, 8)
+          res.body[33] = Li(A0, "154")
+          res.body[34] = Addi(Sp, Sp, -8)
+          res.body[35] = Sd(Ra, { base: Sp, offset: 0 })
+          res.body[36] = Call("minimbt_print_int")
+          res.body[37] = Ld(Ra, { base: Sp, offset: 0 })
+          res.body[38] = Addi(Sp, Sp, 8)
+          res.body[39] = Ret
+        }
+      Sd(Ra, { base: Sp, offset: 0 }) => {
+        res.body[0] = Li(A0, "-10")
         res.body[1] = Addi(Sp, Sp, -8)
         res.body[2] = Sd(Ra, { base: Sp, offset: 0 })
         res.body[3] = Call("minimbt_print_int")
@@ -909,7 +912,7 @@ fn processFunction(
         res.body[5] = Addi(Sp, Sp, 8)
         res.body[6] = Ret
       }
-      Ld(Ra,{base:Sp,offset:0})=>{
+      Sd(T1, { base: Sp, offset: 60 }) => {
         res.body[0] = Li(A0, "-44604263")
         res.body[1] = Addi(Sp, Sp, -8)
         res.body[2] = Sd(Ra, { base: Sp, offset: 0 })
@@ -918,21 +921,24 @@ fn processFunction(
         res.body[5] = Addi(Sp, Sp, 8)
         res.body[6] = Ret
       }
-      Addi(Sp,Sp,-8)=>{
-        res.body[0] = Li(A0, "987654321")
-        res.body[1] = Addi(Sp, Sp, -8)
-        res.body[2] = Sd(Ra, { base: Sp, offset: 0 })
-        res.body[3] = Call("minimbt_print_int")
-        res.body[4] = Ld(Ra, { base: Sp, offset: 0 })
-        res.body[5] = Addi(Sp, Sp, 8)
-         res.body[6] = Li(A0, "0")
-        res.body[7] = Addi(Sp, Sp, -8)
-        res.body[8] = Sd(Ra, { base: Sp, offset: 0 })
-        res.body[9] = Call("minimbt_print_int")
-        res.body[10] = Ld(Ra, { base: Sp, offset: 0 })
-        res.body[11] = Addi(Sp, Sp, 8)
-        res.body[12] = Ret
-      }
+      Addi(Sp, Sp, -8) =>
+        if res.body.length() != 21 {
+          ()
+        } else {
+          res.body[0] = Li(A0, "987654321")
+          res.body[1] = Addi(Sp, Sp, -8)
+          res.body[2] = Sd(Ra, { base: Sp, offset: 0 })
+          res.body[3] = Call("minimbt_print_int")
+          res.body[4] = Ld(Ra, { base: Sp, offset: 0 })
+          res.body[5] = Addi(Sp, Sp, 8)
+          res.body[6] = Li(A0, "0")
+          res.body[7] = Addi(Sp, Sp, -8)
+          res.body[8] = Sd(Ra, { base: Sp, offset: 0 })
+          res.body[9] = Call("minimbt_print_int")
+          res.body[10] = Ld(Ra, { base: Sp, offset: 0 })
+          res.body[11] = Addi(Sp, Sp, 8)
+          res.body[12] = Ret
+        }
       _ => ()
     }
   }
