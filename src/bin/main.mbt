@@ -6,8 +6,8 @@ enum Stages {
   KnfOpt
   Closure
   Asm
-  Finished
   Js
+  Finished
 } derive(Show, Eq, Compare)
 
 fn Stages::from_string(s : String) -> Stages? {
@@ -24,15 +24,24 @@ fn Stages::from_string(s : String) -> Stages? {
   }
 }
 
-fn Stages::next(self : Stages) -> Stages {
-  match self {
-    Stages::Parse => Stages::Typecheck
-    Stages::Typecheck => Stages::Knf
-    Stages::Knf => Stages::KnfOpt
-    Stages::KnfOpt => Stages::Closure
-    Stages::Closure => Stages::Asm
-    Stages::Asm => Stages::Finished
-    Stages::Finished => Stages::Finished
+fn Stages::next(self : Stages, js_mode: Bool) -> Stages {
+  if not(js_mode) {
+    match self {
+      Stages::Parse => Stages::Typecheck
+      Stages::Typecheck => Stages::Knf
+      Stages::Knf => Stages::KnfOpt
+      Stages::KnfOpt => Stages::Closure
+      Stages::Closure => Stages::Asm
+      Stages::Asm => Stages::Finished
+      Stages::Finished => Stages::Finished
+    }
+  }
+  else {
+    match self {
+      Stages::Parse => Stages::Js
+      Stages::Js => Stages::Finished
+      Stages::Finished => Stages::Finished
+    }
   }
 }
 
@@ -86,7 +95,7 @@ fn CompileStatus::initialize(
 }
 
 /// Run the next stage of compilation. Returns true if the compilation is finished.
-fn CompileStatus::step(self : CompileStatus) -> Bool {
+fn CompileStatus::step(self : CompileStatus, js_mode: Bool) -> Bool {
   if self.curr_stage >= self.end_stage {
     return true
   }
@@ -121,12 +130,12 @@ fn CompileStatus::step(self : CompileStatus) -> Bool {
       self.asm = Some(real_asm)
     }
     Js => {
-      let code = @js.jscodegen(self.ast.unwrap())
+      let code = @js.generator(self.ast.unwrap())
       self.js_code = Some(code)
     }
     Finished => ()
   }
-  self.curr_stage = self.curr_stage.next()
+  self.curr_stage = self.curr_stage.next(js_mode)
   self.curr_stage >= self.end_stage
 }
 
@@ -172,7 +181,6 @@ fn main {
   let print = Ref::new([])
   let js_mode = Ref::new(false)
   // 
-  println(argv)
   @ArgParser.parse(
     [
       (
@@ -221,7 +229,7 @@ fn main {
       ),
       (
         "--js",
-        "-o",
+        "",
         @ArgParser.Set(js_mode),
         "Generate Js code",
       ),
@@ -282,7 +290,6 @@ fn main {
     end_stage.val = Stages::Closure
   }
   if js_mode.val {
-    start_stage.val = Stages::Parse
     end_stage.val = Stages::Js
   }
   let stages_to_print = print.val.map(
@@ -304,18 +311,17 @@ fn main {
 
   // Compilation
   let status = match
-    CompileStatus::initialize?(start_stage.val, end_stage.val.next(), contents) {
+    CompileStatus::initialize?(start_stage.val, end_stage.val.next(js_mode.val), contents) {
     Ok(status) => status
     Err(e) => {
       println(e)
       @util.die("Initialization error")
     }
   }
-
   // Run stages
   while true {
     let stg = status.curr_stage
-    let stop = status.step()
+    let stop = status.step(js_mode.val)
     if stages_to_print.contains(stg) {
       println("Stage: \{stg}")
       println(status.output(json.val))
@@ -346,6 +352,13 @@ fn main {
         @util.die("Closure interpreter error")
       }
     }
+  } else if js_mode.val {
+    let js_code = status.js_code
+    if out_file.val == "-" {
+      println(js_code.unwrap())
+    } else {
+      @fs.write_to_string(out_file.val, js_code.unwrap())
+    }
   } else {
     let out_string = status.output(json.val)
     if out_file.val == "-" {
@@ -354,4 +367,5 @@ fn main {
       @fs.write_to_string(out_file.val, out_string)
     }
   }
+  
 }
