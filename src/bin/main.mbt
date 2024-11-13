@@ -7,11 +7,13 @@ enum Stages {
   Closure
   Asm
   Finished
+  Js
 } derive(Show, Eq, Compare)
 
 fn Stages::from_string(s : String) -> Stages? {
   match s {
     "parse" => Some(Stages::Parse)
+    "js" => Some(Stages::Js)
     "typecheck" => Some(Stages::Typecheck)
     "knf" => Some(Stages::Knf)
     "knf-opt" => Some(Stages::KnfOpt)
@@ -45,6 +47,7 @@ struct CompileStatus {
   mut opt_knf : @knf.Knf?
   mut closure_ir : @closure.Program?
   mut asm : Array[@riscv.AssemblyFunction]?
+  mut js_code : String?
 }
 
 fn CompileStatus::initialize(
@@ -63,6 +66,7 @@ fn CompileStatus::initialize(
     opt_knf: None,
     closure_ir: None,
     asm: None,
+    js_code: None,
   }
   match start_stage {
     Parse => v.source_code = Some(file)
@@ -116,6 +120,10 @@ fn CompileStatus::step(self : CompileStatus) -> Bool {
       let real_asm = @riscv.emit(self.closure_ir.unwrap())
       self.asm = Some(real_asm)
     }
+    Js => {
+      let code = @js.jscodegen(self.ast.unwrap())
+      self.js_code = Some(code)
+    }
     Finished => ()
   }
   self.curr_stage = self.curr_stage.next()
@@ -131,6 +139,7 @@ fn CompileStatus::output(self : CompileStatus, json : Bool) -> String {
       KnfOpt => @json.stringify(self.knf.unwrap().to_json())
       Closure => @json.stringify(self.opt_knf.unwrap().to_json())
       Asm => @util.die("TODO")
+      Js => self.js_code.unwrap()
       Finished => @riscv.print_functions(self.asm.unwrap())
     }
   } else {
@@ -141,6 +150,7 @@ fn CompileStatus::output(self : CompileStatus, json : Bool) -> String {
       KnfOpt => self.knf.unwrap().to_string()
       Closure => self.opt_knf.unwrap().to_string()
       Asm => @util.die("TODO")
+      Js => self.js_code.unwrap().to_string()
       Finished => @riscv.print_functions(self.asm.unwrap())
     }
   }
@@ -160,8 +170,9 @@ fn main {
   let closure_interpreter = Ref::new(false)
   let out_file = Ref::new("-")
   let print = Ref::new([])
-
+  let js_mode = Ref::new(false)
   // 
+  println(argv)
   @ArgParser.parse(
     [
       (
@@ -208,6 +219,12 @@ fn main {
         @ArgParser.String(fn(s) { out_file.val = s }),
         "Output file",
       ),
+      (
+        "--js",
+        "-o",
+        @ArgParser.Set(js_mode),
+        "Generate Js code",
+      ),
       ("--json", "", @ArgParser.Set(json), "Print results as JSON"),
 
       // Regular directives
@@ -245,6 +262,7 @@ fn main {
         ),
         "Inline threshold for KNF optimization",
       ),
+      
     ],
     fn(s) {
       if file.is_empty().not() {
@@ -262,6 +280,10 @@ fn main {
   }
   if closure_interpreter.val {
     end_stage.val = Stages::Closure
+  }
+  if js_mode.val {
+    start_stage.val = Stages::Parse
+    end_stage.val = Stages::Js
   }
   let stages_to_print = print.val.map(
     fn(s) {
