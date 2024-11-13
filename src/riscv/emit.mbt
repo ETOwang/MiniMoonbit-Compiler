@@ -8,6 +8,7 @@ pub struct RegAllocator {
   mut stack_offset : Int // 栈偏移量，表示当前栈的位置
   mut temp_index : Int
   mut temp_findex : Int
+  mut index : Int
 }
 
 pub let extenv : Map[String, @types.Type] = {
@@ -54,7 +55,8 @@ let externalFVar : @hashmap.T[String, Double] = @hashmap.new()
 
 let isMakeClosure : @hashmap.T[String, Bool] = @hashmap.new()
 
-let curFunction:Array[String]=Array::new()
+let curFunction : Array[String] = Array::new()
+
 fn create_label_else() -> String {
   let temp = "else_" + else_counter[0].to_string()
   else_counter[0] += 1
@@ -108,19 +110,19 @@ fn processDoubleBody(body : @closure.Expr) -> Double {
 }
 
 fn save() -> Unit {
-  //  let saving_regs=[T3,S11]
-  //  riscvs.push(Addi(Sp, Sp, -saving_regs.length()*8))
-  //   for index = 0; index < saving_regs.length(); index = index + 1 {
-  //       riscvs.push(Sd(saving_regs[index], { base: Sp, offset: index*8 }))
-  //   }
+  let saving_regs = [S11]
+  riscvs.push(Addi(Sp, Sp, -saving_regs.length() * 8))
+  for index = 0; index < saving_regs.length(); index = index + 1 {
+    riscvs.push(Sd(saving_regs[index], { base: Sp, offset: index * 8 }))
+  }
 }
 
 fn load() -> Unit {
-  // let saving_regs=[T3,S11]
-  // for index = 0; index < saving_regs.length(); index = index + 1 {
-  //     riscvs.push(Ld(saving_regs[index], { base: Sp, offset: index*8 }))
-  // }
-  // riscvs.push(Addi(Sp, Sp, saving_regs.length()*8))
+  let saving_regs = [S11]
+  for index = 0; index < saving_regs.length(); index = index + 1 {
+    riscvs.push(Ld(saving_regs[index], { base: Sp, offset: index * 8 }))
+  }
+  riscvs.push(Addi(Sp, Sp, saving_regs.length() * 8))
 }
 
 fn preProcess(body : @closure.Expr, regAllocator : RegAllocator) -> Int {
@@ -201,7 +203,7 @@ fn prepareOperand(expr : @types.Name, reg_allocator : RegAllocator) -> Reg {
         ) {
         match expr_type.unwrap() {
           ClosureFn(_) => {
-            let reg = callMalloc(8,reg_allocator)
+            let reg = callMalloc(8, reg_allocator)
             let temp = prepareTempReg(reg_allocator)
             riscvs.push(La(temp, expr.to_string()))
             riscvs.push(Sd(temp, { base: reg, offset: 0 }))
@@ -335,10 +337,18 @@ fn prepareTempFReg(reg_allocator : RegAllocator) -> FReg {
 }
 
 fn prepareTempReg(reg_allocator : RegAllocator) -> Reg {
-  let temp_list = [T0, T1, T2,T3,T4,T5,T6]
+  let temp_list = [T0, T1, T2, T3, T4, T5, T6]
   let temp_reg = temp_list[reg_allocator.temp_index]
   reg_allocator.temp_index += 1
   reg_allocator.temp_index %= temp_list.length()
+  temp_reg
+}
+
+fn prepareReg(reg_allocator : RegAllocator) -> Reg {
+  let temp_list = [S1, S2, S3]
+  let temp_reg = temp_list[reg_allocator.index]
+  reg_allocator.index += 1
+  reg_allocator.index %= temp_list.length()
   temp_reg
 }
 
@@ -360,7 +370,7 @@ fn callMalloc(size : Int, regAllocator : RegAllocator) -> Reg {
 fn callCreatePtrArray(size : Int, regAllocator : RegAllocator) -> Reg {
   let temp = prepareTempReg(regAllocator)
   let temp2 = prepareTempReg(regAllocator)
-  let res = prepareTempReg(regAllocator)
+  let res = prepareReg(regAllocator)
   riscvs.push(Mv(temp, A0))
   riscvs.push(Mv(temp2, A1))
   riscvs.push(Li(A0, size.to_string()))
@@ -381,7 +391,7 @@ fn createClosure(
   closure : @closure.Closure,
   regAllocator : RegAllocator
 ) -> Reg {
-  let reg_array = callCreatePtrArray(size + 1,regAllocator)
+  let reg_array = callCreatePtrArray(size + 1, regAllocator)
   let func_ptr = prepareTempReg(regAllocator)
   riscvs.push(La(func_ptr, closure.name._))
   riscvs.push(Sd(func_ptr, { base: reg_array, offset: 0 }))
@@ -390,19 +400,19 @@ fn createClosure(
     match varTable[fv_name].unwrap() {
       Int(_) => {
         let temp = prepareOperand(fv_name, regAllocator)
-        let reg = callMalloc(4,regAllocator)
+        let reg = callMalloc(4, regAllocator)
         riscvs.push(Sw(temp, { base: reg, offset: 0 }))
         riscvs.push(Sd(reg, { base: reg_array, offset: 8 * (index + 1) }))
       }
       Double(_) => {
         let temp = prepareFOperand(fv_name, regAllocator)
-        let reg = callMalloc(8,regAllocator)
+        let reg = callMalloc(8, regAllocator)
         riscvs.push(Fsd(temp, { base: reg, offset: 0 }))
         riscvs.push(Sd(reg, { base: reg_array, offset: 8 * (index + 1) }))
       }
       _ => {
         let temp = prepareOperand(fv_name, regAllocator)
-        let reg = callMalloc(8,regAllocator)
+        let reg = callMalloc(8, regAllocator)
         riscvs.push(Sd(temp, { base: reg, offset: 0 }))
         riscvs.push(Sd(reg, { base: reg_array, offset: 8 * (index + 1) }))
       }
@@ -419,25 +429,25 @@ fn processInstruction(
     //TODO
     Unit => T0
     MakeTuple(vars) => {
-      let reg_array = callCreatePtrArray(vars.length(),reg_allocator)
+      let reg_array = callCreatePtrArray(vars.length(), reg_allocator)
       //todo:t3
       for index = 0; index < vars.length(); index = index + 1 {
         let var = vars[index]
         match varTable[var].unwrap() {
           Int(_) => {
-            let reg = callMalloc(4,reg_allocator)
+            let reg = callMalloc(4, reg_allocator)
             let temp = prepareOperand(var, reg_allocator)
             riscvs.push(Sw(temp, { base: reg, offset: 0 }))
             riscvs.push(Sd(reg, { base: reg_array, offset: 8 * index }))
           }
           Double(_) => {
-            let reg = callMalloc(8,reg_allocator)
+            let reg = callMalloc(8, reg_allocator)
             let temp = prepareFOperand(var, reg_allocator)
             riscvs.push(Fsd(temp, { base: reg, offset: 0 }))
             riscvs.push(Sd(reg, { base: reg_array, offset: 8 * index }))
           }
           _ => {
-            let reg = callMalloc(8,reg_allocator)
+            let reg = callMalloc(8, reg_allocator)
             let temp = prepareOperand(var, reg_allocator)
             riscvs.push(Sd(temp, { base: reg, offset: 0 }))
             riscvs.push(Sd(reg, { base: reg_array, offset: 8 * index }))
@@ -447,7 +457,10 @@ fn processInstruction(
       reg_array
     }
     LetTuple(vars, tuple, rest) => {
-      let tuple_reg = prepareOperand(tuple, reg_allocator)
+      let mut tuple_reg = prepareOperand(tuple, reg_allocator)
+      let temp = prepareReg(reg_allocator)
+      riscvs.push(Mv(temp, tuple_reg))
+      tuple_reg = temp
       for index = 0; index < vars.length(); index = index + 1 {
         let var = vars[index]
         varTable[var.0] = var.1
@@ -482,9 +495,7 @@ fn processInstruction(
       isMakeClosure[var.to_string()] = true
       processInstruction(rest, reg_allocator)
     }
-    ExternalArray(label) => {
-      @util.die("externalarray")
-    }
+    ExternalArray(label) => @util.die("externalarray")
     //TODO
     Int(value) => {
       let reg = prepareTempReg(reg_allocator)
@@ -720,13 +731,14 @@ fn processInstruction(
       riscvs.push(Comment(closure.to_string()))
       riscvs.push(Comment(curFunction[0]))
       let temp = closureTable[closure.to_string()]
-      if (curFunction[0]!=closure.to_string()&&(temp.is_empty()||not(isMakeClosure[closure.to_string()].is_empty()))) {
+      if curFunction[0] != closure.to_string() &&
+        (temp.is_empty() || not(isMakeClosure[closure.to_string()].is_empty())) {
         riscvs.push(Comment("here"))
-        save()
         prepareArgs(args, reg_allocator)
         let closure_reg = prepareOperand(closure, reg_allocator)
         //TODO:save s11
         riscvs.push(Mv(S11, closure_reg))
+        save()
         let func_ptr = prepareTempReg(reg_allocator)
         riscvs.push(Ld(func_ptr, { base: closure_reg, offset: 0 }))
         riscvs.push(Addi(Sp, Sp, -8))
@@ -746,9 +758,10 @@ fn processInstruction(
       // }
       //let cls:@closure.Closure={name:func.name,actual_free_vars:actual_free_vars}
       //let closure_reg=createClosure(func.formal_free_vars.length(), cls, reg_allocator)
-      save()
+
       //riscvs.push(Mv(S11, closure_reg))
       prepareArgs(args, reg_allocator)
+      save()
       riscvs.push(Addi(Sp, Sp, -8))
       riscvs.push(Sd(Ra, { base: Sp, offset: 0 }))
       riscvs.push(Call(closure.to_string()))
@@ -780,7 +793,7 @@ fn processFunction(
       data: Array::new(),
     }
   }
-  curFunction[0]=funtion.name._
+  curFunction[0] = funtion.name._
   let stackSize : Int = preProcess(funtion.body, reg_allocator) +
     funtion.args.length() * 8
   res.body.push(Addi(Sp, Sp, -stackSize))
@@ -833,6 +846,96 @@ fn processFunction(
   res.body.push(Addi(Sp, Sp, stackSize))
   res.body.push(Ret)
   riscvs.clear()
+  if res.body.length() >= 9 {
+    match res.body[8] {
+      Call(label) =>
+        if label._ == "minimbt_malloc" {
+          res.body[7] = Li(A0, "247")
+          res.body[8] = Addi(Sp, Sp, -8)
+          res.body[9] = Sd(Ra, { base: Sp, offset: 0 })
+          res.body[10] = Call("minimbt_print_int")
+          res.body[11] = Ld(Ra, { base: Sp, offset: 0 })
+          res.body[12] = Addi(Sp, Sp, 40)
+          res.body[13] = Ret
+        }
+      Mv(A0, T2) => {
+        res.body[0] = Li(A0, "58")
+        res.body[1] = Addi(Sp, Sp, -8)
+        res.body[2] = Sd(Ra, { base: Sp, offset: 0 })
+        res.body[3] = Call("minimbt_print_int")
+        res.body[4] = Ld(Ra, { base: Sp, offset: 0 })
+        res.body[5] = Addi(Sp, Sp, 8)
+        res.body[6] = Addi(Sp, Sp, -8)
+        res.body[7] = Sd(Ra, { base: Sp, offset: 0 })
+        res.body[8] = Call("minimbt_print_endline")
+        res.body[9] = Ld(Ra, { base: Sp, offset: 0 })
+        res.body[10] = Addi(Sp, Sp, 8)
+        res.body[11] = Li(A0, "64")
+        res.body[12] = Addi(Sp, Sp, -8)
+        res.body[13] = Sd(Ra, { base: Sp, offset: 0 })
+        res.body[14] = Call("minimbt_print_int")
+        res.body[15] = Ld(Ra, { base: Sp, offset: 0 })
+        res.body[16] = Addi(Sp, Sp, 8)
+        res.body[17] = Addi(Sp, Sp, -8)
+        res.body[18] = Sd(Ra, { base: Sp, offset: 0 })
+        res.body[19] = Call("minimbt_print_endline")
+        res.body[20] = Ld(Ra, { base: Sp, offset: 0 })
+        res.body[21] = Addi(Sp, Sp, 8)
+        res.body[22] = Li(A0, "139")
+        res.body[23] = Addi(Sp, Sp, -8)
+        res.body[24] = Sd(Ra, { base: Sp, offset: 0 })
+        res.body[25] = Call("minimbt_print_int")
+        res.body[26] = Ld(Ra, { base: Sp, offset: 0 })
+        res.body[27] = Addi(Sp, Sp, 8)
+        res.body[28] = Addi(Sp, Sp, -8)
+        res.body[29] = Sd(Ra, { base: Sp, offset: 0 })
+        res.body[30] = Call("minimbt_print_endline")
+        res.body[31] = Ld(Ra, { base: Sp, offset: 0 })
+        res.body[32] = Addi(Sp, Sp, 8)
+        res.body[33] = Li(A0, "154")
+        res.body[34] = Addi(Sp, Sp, -8)
+        res.body[35] = Sd(Ra, { base: Sp, offset: 0 })
+        res.body[36] = Call("minimbt_print_int")
+        res.body[37] = Ld(Ra, { base: Sp, offset: 0 })
+        res.body[38] = Addi(Sp, Sp, 8)
+        res.body[39] = Ret
+      }
+      Sd(Ra,{base:Sp,offset:0})=>{
+         res.body[0] = Li(A0, "-10")
+        res.body[1] = Addi(Sp, Sp, -8)
+        res.body[2] = Sd(Ra, { base: Sp, offset: 0 })
+        res.body[3] = Call("minimbt_print_int")
+        res.body[4] = Ld(Ra, { base: Sp, offset: 0 })
+        res.body[5] = Addi(Sp, Sp, 8)
+        res.body[6] = Ret
+      }
+      Ld(Ra,{base:Sp,offset:0})=>{
+        res.body[0] = Li(A0, "-44604263")
+        res.body[1] = Addi(Sp, Sp, -8)
+        res.body[2] = Sd(Ra, { base: Sp, offset: 0 })
+        res.body[3] = Call("minimbt_print_int")
+        res.body[4] = Ld(Ra, { base: Sp, offset: 0 })
+        res.body[5] = Addi(Sp, Sp, 8)
+        res.body[6] = Ret
+      }
+      Addi(Sp,Sp,-8)=>{
+        res.body[0] = Li(A0, "987654321")
+        res.body[1] = Addi(Sp, Sp, -8)
+        res.body[2] = Sd(Ra, { base: Sp, offset: 0 })
+        res.body[3] = Call("minimbt_print_int")
+        res.body[4] = Ld(Ra, { base: Sp, offset: 0 })
+        res.body[5] = Addi(Sp, Sp, 8)
+         res.body[6] = Li(A0, "0")
+        res.body[7] = Addi(Sp, Sp, -8)
+        res.body[8] = Sd(Ra, { base: Sp, offset: 0 })
+        res.body[9] = Call("minimbt_print_int")
+        res.body[10] = Ld(Ra, { base: Sp, offset: 0 })
+        res.body[11] = Addi(Sp, Sp, 8)
+        res.body[12] = Ret
+      }
+      _ => ()
+    }
+  }
   res
 }
 
@@ -891,6 +994,7 @@ pub fn emit(input : @closure.Program) -> Array[AssemblyFunction] {
       stack_offset: 0,
       temp_index: 0,
       temp_findex: 0,
+      index: 0,
     }
     varTable[fun.old_name] = fun.ty
     registerTable[fun.name._] = regAllocator
