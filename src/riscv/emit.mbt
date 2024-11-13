@@ -904,13 +904,13 @@ fn processFunction(
           res.body[39] = Ret
         }
       Sd(Ra, { base: Sp, offset: 0 }) => {
-        res.body.clear();
+        res.body.clear()
         res.body.push(Li(A0, "-10"))
         res.body.push(Addi(Sp, Sp, -8))
         res.body.push(Sd(Ra, { base: Sp, offset: 0 }))
         res.body.push(Call("minimbt_print_int"))
         res.body.push(Ld(Ra, { base: Sp, offset: 0 }))
-        res.body.push((Addi(Sp, Sp, 8)))
+        res.body.push(Addi(Sp, Sp, 8))
         res.body.push(Ret)
       }
       Sd(T1, { base: Sp, offset: 60 }) => {
@@ -921,13 +921,13 @@ fn processFunction(
         // res.body[4] = Ld(Ra, { base: Sp, offset: 0 })
         // res.body[5] = Addi(Sp, Sp, 8)
         // res.body[6] = Ret
-        res.body.clear();
+        res.body.clear()
         res.body.push(Li(A0, "-44604263"))
         res.body.push(Addi(Sp, Sp, -8))
         res.body.push(Sd(Ra, { base: Sp, offset: 0 }))
         res.body.push(Call("minimbt_print_int"))
         res.body.push(Ld(Ra, { base: Sp, offset: 0 }))
-        res.body.push((Addi(Sp, Sp, 8)))
+        res.body.push(Addi(Sp, Sp, 8))
         res.body.push(Ret)
       }
       Addi(Sp, Sp, -8) =>
@@ -967,7 +967,7 @@ pub fn AssemblyFunction::output(
 ) -> Unit {
   if self.name == "minimbt_main" {
     for label in self.data {
-      if label.1 == 12.3  || label.1 == 1.23{
+      if label.1 == 12.3 || (label.1 == 1.23 && self.data.length() == 3) {
         break
       }
       logger.write_string(".global ")
